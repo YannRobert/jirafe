@@ -27,7 +27,7 @@ class HandlerTest(unittest.TestCase):
             "quiet": True,
             "public": {"jiraWeb": JIRA, "boardId": 42, "fields": {"developer": "customfield_1"}, "views": []},
         }
-        mirror = IssueMirror(
+        self.mirror = mirror = IssueMirror(
             self.directory.name,
             FakeJira([{"key": "ABC-1", "fields": {"assignee": {"name": "alice"}}}]),
             42,
@@ -318,3 +318,13 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertIn("windows", json.loads(body))
         self.assertEqual(self.upstream.requests, [])
+
+    def test_changes_marks_the_mirror_watched(self):
+        self.assertFalse(self.mirror.watched())
+        status, body = self.call("GET", "/changes")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"changedAt": None})
+        self.assertTrue(self.mirror.watched())
+        self.mirror.changed_at = 1_700_000_000.5
+        status, body = self.call("GET", "/changes")
+        self.assertEqual(json.loads(body), {"changedAt": 1_700_000_000_500})

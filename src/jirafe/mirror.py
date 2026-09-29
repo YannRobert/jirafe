@@ -15,6 +15,8 @@ from .constants import (
     REPLACE_RETRY_DELAY_S,
     SEARCH_PAGE_SIZE,
     SYNC_OVERLAP_MIN,
+    WATCH_INTERVAL_S,
+    WATCH_TTL_S,
 )
 from .jira import JiraError
 
@@ -38,6 +40,10 @@ class IssueMirror:
         # What determines the content of a local copy: if it changes, the next pass is a full one.
         self._signature = f"{fields}&expand={ISSUE_EXPAND}"
         self._lock = threading.Lock()
+        self._watched_at = None
+        # Last time a pass found an issue that differs from its local copy (epoch seconds): the page reloads
+        # its board when it is older.
+        self.changed_at = None
 
     def read(self, key):
         try:
@@ -52,26 +58,44 @@ class IssueMirror:
         )
         return self._write(issue)
 
-    def sync_board(self):
+    def watch(self):
+        """A page is showing the board: until WATCH_TTL_S without news from it, passes run every
+        WATCH_INTERVAL_S."""
+        self._watched_at = time.monotonic()
+
+    def watched(self):
+        return self._watched_at is not None and time.monotonic() - self._watched_at < WATCH_TTL_S
+
+    def sync_board(self, refresh_sprints=True):
         """Full pass if the last one is more than a day old, incremental otherwise; returns the number of issues
-        written. One pass at a time."""
+        written. One pass at a time.
+        An incremental pass first asks only for the modification date of recently updated issues, then the
+        whole of those that differ from their local copy: frequent passes stay light, and an issue already
+        resynced after a write from the page is not fetched again."""
         with self._lock:
             state = self._read_state()
             now = time.time()
             # Field list changed: existing copies lack the new fields, so the pass is a full one.
             full = now - state.get("fullSyncAt", 0) > FULL_SYNC_INTERVAL_S or state.get("fields") != self._signature
-            sprints = self._jira.get_json(
-                f"rest/agile/1.0/board/{self._board_id}/sprint?state=active",
-                "sync"
-            )["values"]
-            if not sprints:
+            # Active sprints rarely change: the frequent passes reuse those of the last regular one.
+            if refresh_sprints or full or "sprints" not in state:
+                state["sprints"] = [sprint["id"] for sprint in self._jira.get_json(
+                    f"rest/agile/1.0/board/{self._board_id}/sprint?state=active",
+                    "sync"
+                )["values"]]
+            if not state["sprints"]:
                 return 0
-            jql = f"sprint in ({','.join(str(s['id']) for s in sprints)})"
-            if not full:
+            jql = f"sprint in ({','.join(str(sprint) for sprint in state['sprints'])})"
+            if full:
+                issues = self._search(jql)
+            else:
                 minutes = int((now - state["syncAt"]) / 60) + SYNC_OVERLAP_MIN
-                jql += f" AND updated >= -{minutes}m"
+                issues = self._search_changed(f"{jql} AND updated >= -{minutes}m")
             written = 0
-            for issue in self._search(jql):
+            for issue in issues:
+                previous = self.read(issue["key"])
+                if not previous or previous["data"]["fields"].get("updated") != issue["fields"].get("updated"):
+                    self.changed_at = time.time()
                 self._write(issue)
                 written += 1
             state["syncAt"] = now
@@ -94,11 +118,29 @@ class IssueMirror:
             "directory": str(self._issues),
         }
 
-    def _search(self, jql):
+    def _search_changed(self, jql):
+        stale = [
+            issue["key"] for issue in self._search(
+                jql,
+                "updated",
+                light=True
+            )
+            if (self.read(issue["key"]) or {}).get("data", {}).get("fields", {}).get("updated") != issue["fields"].get("updated")
+        ]
+        for start in range(0, len(stale), SEARCH_PAGE_SIZE):
+            yield from self._search(f"key in ({','.join(stale[start:start + SEARCH_PAGE_SIZE])})")
+
+    def _search(
+            self,
+            jql,
+            fields=None,
+            light=False
+    ):
+        expand = "" if light else f"&expand={ISSUE_EXPAND}"
         start = 0
         while True:
             page = self._jira.get_json(
-                f"rest/api/2/search?jql={quote(jql)}&fields={self._fields}&expand={ISSUE_EXPAND}"
+                f"rest/api/2/search?jql={quote(jql)}&fields={fields or self._fields}{expand}"
                 f"&startAt={start}&maxResults={SEARCH_PAGE_SIZE}",
                 "sync"
             )
@@ -181,12 +223,20 @@ def run_background_sync(
         interval_s,
         quiet
 ):
+    """A pass every interval_s; every WATCH_INTERVAL_S while a page is watching, so that a change made in
+    Jira shows in it within a minute rather than five."""
+    last_regular = None
     while True:
         started = time.monotonic()
-        try:
-            written = mirror.sync_board()
-            if not quiet:
-                print(f"[mirror] {written} issue(s) synced in {time.monotonic() - started:.1f} s", flush=True)
-        except (OSError, http.client.HTTPException, JiraError, ValueError, KeyError) as error:
-            print(f"[mirror] sync failed: {error}", flush=True)
-        time.sleep(interval_s)
+        regular = last_regular is None or started - last_regular >= interval_s
+        if regular or mirror.watched():
+            if regular:
+                last_regular = started
+            try:
+                written = mirror.sync_board(refresh_sprints=regular)
+                # The frequent passes mostly find nothing: only the regular ones are always logged.
+                if not quiet and (regular or written):
+                    print(f"[mirror] {written} issue(s) synced in {time.monotonic() - started:.1f} s", flush=True)
+            except (OSError, http.client.HTTPException, JiraError, ValueError, KeyError) as error:
+                print(f"[mirror] sync failed: {error}", flush=True)
+        time.sleep(min(interval_s, WATCH_INTERVAL_S))

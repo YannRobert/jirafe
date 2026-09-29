@@ -114,7 +114,7 @@ Then open <http://localhost:8766>.
 | `--board` | `boardId` from the configuration | Jira board id (`rapidView`) |
 | `--port` | `8766` | local listening port |
 | `--mirror-dir` | see [Local copy](#local-copy) | directory of the local copy of issues |
-| `--sync-interval` | `300` | seconds between two incremental background syncs |
+| `--sync-interval` | `300` | seconds between two incremental background syncs (30 s while a page is visible) |
 | `--quiet` | — | do not log every request |
 | `--open` | — | open the browser once the server is ready |
 
@@ -135,11 +135,15 @@ browser ──► http://localhost:8766 ──► Jira
 | `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
 | `PUT /transition` | applies a transition to an issue (changes its status) |
 | `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
+| `GET /changes` | when the background sync last found a changed issue; tells the server a page is watching |
 | `GET /mirror/status` | state of the local copy |
 
 - **Board in one call**: `allData.json`, the endpoint used by Jira's own board page.
 - **Local copy**: one JSON file per issue. Full sweep at startup, then once a day; in between, only
-  modified issues are resynced.
+  modified issues are resynced. Jira cannot notify a local tool (its webhooks need an administrator and an
+  address Jira can reach), so it is asked: every 5 minutes, and every 30 seconds while a page is visible,
+  with a light search (modification dates only) followed by the full fetch of the issues that changed.
+  A change made elsewhere then reaches the open detail and the board within about 45 seconds.
 
 ### Local copy
 

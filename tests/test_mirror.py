@@ -1,9 +1,10 @@
 import tempfile
+import time
 import unittest
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
-from jirafe.constants import BASE_DETAIL_FIELDS
+from jirafe.constants import BASE_DETAIL_FIELDS, WATCH_TTL_S
 from jirafe.mirror import IssueMirror, detail_fields, slim_history
 from tests.fakes import FakeJira
 
@@ -124,3 +125,61 @@ class IssueMirrorTest(unittest.TestCase):
             "ABC-1"
         )
         self.assertIn("customfield_1", self.jira.paths[-1])
+
+
+class IncrementalPassTest(unittest.TestCase):
+
+    def setUp(self):
+        self.directory = tempfile.TemporaryDirectory()
+        self.jira = FakeJira([
+            {"key": "ABC-1", "fields": {"updated": "2026-01-02T10:00:00.000+0100"}},
+            {"key": "ABC-2", "fields": {"updated": "2026-01-02T10:00:00.000+0100"}},
+        ])
+        self.mirror = IssueMirror(
+            self.directory.name,
+            self.jira,
+            42,
+            BASE_DETAIL_FIELDS
+        )
+        self.mirror.sync_board()
+        self.jira.paths.clear()
+
+    def tearDown(self):
+        self.directory.cleanup()
+
+    def queries(self):
+        return [parse_qs(urlsplit(path).query) for path in self.jira.paths if path.startswith("rest/api/2/search")]
+
+    def test_nothing_changed_costs_one_light_search(self):
+        changed_at = self.mirror.changed_at
+        self.assertEqual(self.mirror.sync_board(), 0)
+        (light,) = self.queries()
+        self.assertEqual(light["fields"], ["updated"])
+        self.assertNotIn("expand", light)
+        self.assertEqual(self.mirror.changed_at, changed_at)
+
+    def test_only_changed_issues_are_fetched_whole(self):
+        self.jira.issues[1] = {"key": "ABC-2", "fields": {"updated": "2026-01-02T11:00:00.000+0100", "summary": "New"}}
+        # A minute later: still an incremental pass.
+        later = time.time() + 60
+        with mock.patch("jirafe.mirror.time.time", return_value=later):
+            self.assertEqual(self.mirror.sync_board(), 1)
+        light, whole = self.queries()
+        self.assertEqual(whole["jql"], ["key in (ABC-2)"])
+        self.assertIn("expand", whole)
+        self.assertEqual(self.mirror.read("ABC-2")["data"]["fields"]["summary"], "New")
+        self.assertEqual(self.mirror.changed_at, later)
+
+    def test_frequent_pass_reuses_the_active_sprints(self):
+        self.mirror.sync_board(refresh_sprints=False)
+        self.assertFalse([path for path in self.jira.paths if "/sprint?" in path])
+        self.mirror.sync_board()
+        self.assertTrue([path for path in self.jira.paths if "/sprint?" in path])
+
+    def test_watched_until_the_page_stops_asking(self):
+        self.assertFalse(self.mirror.watched())
+        with mock.patch("jirafe.mirror.time.monotonic", return_value=1000):
+            self.mirror.watch()
+            self.assertTrue(self.mirror.watched())
+        with mock.patch("jirafe.mirror.time.monotonic", return_value=1000 + WATCH_TTL_S):
+            self.assertFalse(self.mirror.watched())

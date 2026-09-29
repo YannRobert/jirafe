@@ -596,9 +596,10 @@ const META_TTL_MS = 12 * 3600 * 1000;
 // Local copy synced more recently than this: no new Jira call when opening. The server applies the same
 // threshold to its copy on disk, which the background sync may have refreshed in the meantime.
 const DETAIL_FRESH_MS = 30 * 1000;
-// Open panel: the local copy is read again (without calling Jira), to show what the background sync or
-// another tab has written to it.
-const DETAIL_POLL_MS = 15 * 1000;
+// Visible page: the server is asked what its background sync found (without calling Jira), and the open
+// detail is read again from the local copy. Asking also tells the server someone is watching: it then
+// checks Jira every 30 s instead of every 5 minutes.
+const CHANGES_POLL_MS = 15 * 1000;
 const DETAIL_CACHE_SIZE = 80;
 const HOVER_PREFETCH_MS = 120;
 // Asking Jira for people is a request: only after a pause in typing, from a few letters, and only when
@@ -1642,6 +1643,17 @@ async function syncDetail(
   } finally {
     if (state.detailSyncing === key) state.detailSyncing = null;
   }
+}
+
+// An issue of the sprint changed in Jira after the board was loaded (by someone else, or in another
+// browser): the board is reloaded, once for all tabs thanks to the shared refresh.
+async function watchChanges() {
+  if (document.hidden) return;
+  const { changedAt } = await fetch("/changes").then(response => response.json()).catch(() => ({}));
+  reloadOpenDetail();
+  const board = currentBoard();
+  if (!changedAt || !board || board.at >= changedAt || !state.autoRefresh || drag?.started || state.refreshing) return;
+  sharedRefresh({ olderThan: Date.now() - changedAt });
 }
 
 // What the background sync has written since opening is shown without asking Jira anything.
@@ -2941,7 +2953,7 @@ window.addEventListener("storage", e => {
 });
 setInterval(renderStatus, 15 * 1000);
 setInterval(refreshLoad, LOAD_REFRESH_MS);
-setInterval(reloadOpenDetail, DETAIL_POLL_MS);
+setInterval(watchChanges, CHANGES_POLL_MS);
 $("panel-sync").addEventListener("click", e => {
   if (e.target.closest(".resync") && state.openKey) syncDetail(
     state.openKey,

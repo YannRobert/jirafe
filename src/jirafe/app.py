@@ -1,24 +1,29 @@
-"""Jirafe: the Jira board of the current sprint, read-only, served from a local copy.
+"""Jirafe: the Jira board of the current sprint, served from a local copy.
 
 The page (jirafe/static/index.html) only talks to this server:
     /jira/<path>          →  <jira>/<path>   (relay, JIRA_PAT as a Bearer header)
     /issue/<key>          →  local copy of the issue (mirror), without calling Jira
     /issue/<key>?sync=1   →  resyncs the issue from Jira, then returns it — unless the local copy is less
                              than ISSUE_FRESH_S seconds old (&force=1 overrides)
+    /transitions/<key>    →  <jira>/rest/api/2/issue/<key>/transitions   (read)
     PUT /rank             →  <jira>/rest/agile/1.0/issue/rank   (reorders an issue on the board)
+    PUT /assignee         →  <jira>/rest/api/2/issue/<key>/assignee
+    PUT /transition       →  <jira>/rest/api/2/issue/<key>/transitions   (changes an issue's status)
+    /changes              →  when the background sync last found a changed issue; marks the page as watching
     /stats                →  requests made to Jira over 1, 5 and 15 minutes, by origin, without calling Jira
 
 The relay keeps the PAT out of the browser and lets the page show Jira icons and avatars, which require
 authentication. Only GET is relayed, to an allow-list of paths, and the server only listens on 127.0.0.1.
-The only write is an issue's rank, through /rank, which only accepts a body built here from two validated
-issue keys — the PAT cannot write anything else.
+The only writes are the three PUT above, which only accept a body built here from validated values (issue
+keys, a login, a transition id) — the PAT cannot write anything else.
 
 The whole board (columns, sprints, issues, epics) fits in one call: allData.json, the one Jira's own board
 page uses — ~5 KB compressed, against ~250 KB for the agile API without a field filter.
 
 Local mirror: one JSON file per issue under --mirror-dir (outside the repository), with its sync date. A
 thread keeps it up to date: full sweep of the active sprints at startup then once a day, and in between,
-every --sync-interval seconds, only the issues modified since the previous pass.
+every --sync-interval seconds (every WATCH_INTERVAL_S while a page is watching), only the issues modified
+since the previous pass.
 
 Usage:
     ./jirafe.sh                                     # Linux / macOS: starts the server and opens the browser

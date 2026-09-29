@@ -1,4 +1,5 @@
 """Jira test doubles: the tests make no network request."""
+from urllib.parse import parse_qs, urlsplit
 
 
 class FakeJira:
@@ -22,7 +23,11 @@ class FakeJira:
         if "/sprint?" in path:
             return {"values": self.sprints}
         if path.startswith("rest/api/2/search"):
-            return {"issues": [dict(issue) for issue in self.issues], "total": len(self.issues)}
+            jql = parse_qs(urlsplit(path).query)["jql"][0]
+            # "key in (…)": the issues named; any other query: all of them.
+            keys = jql[len("key in ("):-1].split(",") if jql.startswith("key in (") else None
+            found = [dict(issue) for issue in self.issues if keys is None or issue["key"] in keys]
+            return {"issues": found, "total": len(found)}
         key = path.split("?")[0].rsplit("/", 1)[1]
         return dict(next(issue for issue in self.issues if issue["key"] == key))
 

@@ -34,6 +34,10 @@ FULL_SYNC_INTERVAL_S = 24 * 3600
 # Overlap between two incremental passes: covers the clock skew with Jira and the duration of the pass.
 SYNC_OVERLAP_MIN = 3
 SEARCH_PAGE_SIZE = 50
+# While a page is watching (it asks for GET /changes every 15 s), the incremental pass runs this often
+# instead of every --sync-interval; without news from the page for WATCH_TTL_S, it slows down again.
+WATCH_INTERVAL_S = 30
+WATCH_TTL_S = 45
 # On Windows, replacing a file another thread is reading fails (PermissionError): the read lasts a few
 # milliseconds, a few spaced attempts are enough.
 REPLACE_ATTEMPTS = 5

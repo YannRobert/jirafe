@@ -67,6 +67,10 @@ def make_handler(
                 )
             elif self.path == "/mirror/status":
                 self.send_json(200, mirror.status())
+            elif self.path == "/changes":
+                # Asked by the page while it is visible: it is also what tells the mirror someone is watching.
+                mirror.watch()
+                self.send_json(200, {"changedAt": mirror.changed_at and int(mirror.changed_at * 1000)})
             elif self.path == "/stats":
                 self.send_json(200, meter.snapshot())
             elif self.path.startswith("/issue/"):
