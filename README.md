@@ -13,7 +13,7 @@ reads from the cache instead of waiting for Jira. Navigation is instant, without
 the board and open issues are kept up to date without you having to press F5.
 
 **Mostly for reading, with a few edits.** Jirafe was designed for consulting the board, but it can
-already reorder issues by dragging a card within its column, and change an issue's assignee from the
+already reorder issues by dragging a card by its grip (⠿) within its column, and change an issue's assignee from the
 detail panel (click the assignee, or press `A`). Changing an issue's status by dragging its card to
 another column is next (see [Roadmap](#roadmap)).
 
