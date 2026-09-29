@@ -5,17 +5,19 @@ The page (jirafe/static/index.html) only talks to this server:
     /issue/<key>          →  local copy of the issue (mirror), without calling Jira
     /issue/<key>?sync=1   →  resyncs the issue from Jira, then returns it — unless the local copy is less
                              than ISSUE_FRESH_S seconds old (&force=1 overrides)
-    /transitions/<key>    →  <jira>/rest/api/2/issue/<key>/transitions   (read)
+    /transitions/<key>    →  <jira>/rest/api/2/issue/<key>?expand=transitions   (read), with the known paths
+                             from its status to the others (workflow.py)
     PUT /rank             →  <jira>/rest/agile/1.0/issue/rank   (reorders an issue on the board)
     PUT /assignee         →  <jira>/rest/api/2/issue/<key>/assignee
-    PUT /transition       →  <jira>/rest/api/2/issue/<key>/transitions   (changes an issue's status)
+    PUT /transition       →  <jira>/rest/api/2/issue/<key>/transitions   (brings an issue to a status, one
+                             transition of the path at a time)
     /changes              →  when the background sync last found a changed issue; marks the page as watching
     /stats                →  requests made to Jira over 1, 5 and 15 minutes, by origin, without calling Jira
 
 The relay keeps the PAT out of the browser and lets the page show Jira icons and avatars, which require
 authentication. Only GET is relayed, to an allow-list of paths, and the server only listens on 127.0.0.1.
 The only writes are the three PUT above, which only accept a body built here from validated values (issue
-keys, a login, a transition id) — the PAT cannot write anything else.
+keys, a login, a status id) — the PAT cannot write anything else.
 
 The whole board (columns, sprints, issues, epics) fits in one call: allData.json, the one Jira's own board
 page uses — ~5 KB compressed, against ~250 KB for the agile API without a field filter.

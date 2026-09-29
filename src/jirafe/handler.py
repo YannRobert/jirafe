@@ -14,15 +14,18 @@ from .constants import (
     IMAGE_PREFIXES,
     ISSUE_FRESH_S,
     ISSUE_KEY,
+    LIVE_TRANSITIONS_PATH,
+    MAX_TRANSITION_STEPS,
     MAX_WRITE_BODY_BYTES,
     RANK_PATH,
     RELAYED_PREFIXES,
     STATIC_DIR,
-    TRANSITION_ID,
+    STATUS_ID,
     TRANSITIONS_PATH,
     USER_LOGIN,
 )
-from .jira import JiraError
+from .jira import JiraClient, JiraError
+from .workflow import workflow_of
 
 
 def make_handler(
@@ -32,6 +35,26 @@ def make_handler(
         meter
 ):
     config = json.dumps(settings["public"]).replace("</", "<\\/").encode()
+    jira = JiraClient(
+        settings["jira_host"],
+        settings["jira_token"],
+        upstream
+    )
+
+    def live_transitions(key):
+        """The issue's status and the transitions Jira offers out of it right now, which also teach the
+        workflow's graph."""
+        issue = jira.get_json(
+            LIVE_TRANSITIONS_PATH.format(key=key),
+            "page"
+        )
+        status, transitions = issue["fields"]["status"], issue.get("transitions", [])
+        mirror.workflows.learn(
+            workflow_of(issue),
+            status,
+            transitions
+        )
+        return workflow_of(issue), status, transitions
 
     # The configuration is injected into the page: it can show its saved data without waiting for a first
     # round trip to this server. The page is read again on every request, so a change to index.html
@@ -154,21 +177,73 @@ def make_handler(
             )
 
         def put_transition(self, request):
-            key, transition = request.get("issue"), request.get("transition")
-            if not (isinstance(key, str) and ISSUE_KEY.match(key)) or not (isinstance(transition, str) and TRANSITION_ID.match(transition)):
-                self.send_json(400, {"message": "one issue key, and a transition id"})
+            # A status rather than a transition: the workflow may only lead there through other statuses,
+            # which this server goes through itself, one transition at a time.
+            key, target = request.get("issue"), request.get("status")
+            if not (isinstance(key, str) and ISSUE_KEY.match(key)) or not (isinstance(target, str) and STATUS_ID.match(target)):
+                self.send_json(400, {"message": "one issue key, and a status id"})
                 return
-            # Jira checks that the transition is available from the issue's current status.
-            response = self.write_jira(
-                "POST",
-                TRANSITIONS_PATH.format(key=key),
-                {"transition": {"id": transition}}
-            )
-            self.answer_issue_write(
+            try:
+                start, passed, error = self.walk(
+                    key,
+                    target
+                )
+                if error and passed:
+                    # Stopped halfway: the issue goes back to where it was rather than stay in a status
+                    # nobody asked for — when the workflow allows it.
+                    _, _, back_error = self.walk(
+                        key,
+                        str(start["id"])
+                    )
+                    where = f"left in {passed[-1]}, it could not go back to {start['name']}: {back_error}" if back_error else f"back to {start['name']}"
+                    error = f"{error} ({where})"
+            except (OSError, http.client.HTTPException, JiraError, ValueError, KeyError) as failure:
+                passed, error = [], f"Jira unreachable: {failure}"
+            try:
+                entry = mirror.sync_issue(key)
+            except (OSError, http.client.HTTPException, JiraError, ValueError):
+                entry = None
+            if error:
+                self.send_json(409, {"message": error, "issue": entry})
+            else:
+                self.send_json(200, {"transitioned": key, "through": passed, "issue": entry})
+
+        def walk(
+                self,
                 key,
-                response,
-                "transitioned"
-            )
+                target
+        ):
+            """Transitions from status to status up to target, the path planned again at each step from what
+            Jira offers: (start status, names of the statuses reached, error or None)."""
+            start, passed = None, []
+            for _ in range(MAX_TRANSITION_STEPS + 1):
+                workflow, status, transitions = live_transitions(key)
+                start = start or status
+                if str(status["id"]) == target:
+                    return start, passed, None
+                path = mirror.workflows.route(
+                    workflow,
+                    status["id"],
+                    target,
+                    transitions
+                )
+                if not path:
+                    return start, passed, f"no known path from {status['name']}"
+                transition = next(t for t in transitions if str(t["to"]["id"]) == path[0])
+                # Jira checks that the transition is available from the issue's current status.
+                status_code, body = self.send_to_jira(
+                    "POST",
+                    TRANSITIONS_PATH.format(key=key),
+                    {"transition": {"id": str(transition["id"])}}
+                )
+                errors = jira_errors(
+                    status_code,
+                    body
+                )
+                if errors:
+                    return start, passed, f"{transition['name']} refused: {', '.join(errors)}"
+                passed.append(transition["to"]["name"])
+            return start, passed, "too many transitions"
 
         def answer_issue_write(
                 self,
@@ -202,20 +277,32 @@ def make_handler(
         ):
             """Write to Jira with a body built here, never one relayed from the page; None once a 502 is sent."""
             try:
-                status, body, headers = upstream.request(
+                return self.send_to_jira(
                     method,
-                    f"{settings['jira_host']}/{path}",
-                    {
-                        "Authorization": "Bearer " + settings["jira_token"],
-                        "Content-Type": "application/json",
-                        "Accept": "application/json",
-                    },
-                    "write",
-                    json.dumps(payload).encode()
+                    path,
+                    payload
                 )
             except (OSError, http.client.HTTPException) as error:
                 self.send_json(502, {"message": f"Jira unreachable: {error}"})
                 return None
+
+        def send_to_jira(
+                self,
+                method,
+                path,
+                payload
+        ):
+            status, body, headers = upstream.request(
+                method,
+                f"{settings['jira_host']}/{path}",
+                {
+                    "Authorization": "Bearer " + settings["jira_token"],
+                    "Content-Type": "application/json",
+                    "Accept": "application/json",
+                },
+                "write",
+                json.dumps(payload).encode()
+            )
             if headers.get("Content-Encoding") == "gzip":
                 body = gzip.decompress(body)
             return status, body
@@ -262,16 +349,32 @@ def make_handler(
                     self.send_json(502, {"message": f"sync failed: {error}"})
 
         def send_transitions(self):
-            # Read only when a dragged card reaches another column: which columns it may go to. Fields a
-            # transition requires are not checked here: Jira lists some that are always filled (summary), its
-            # refusal says better what is missing.
+            # Read only when a dragged card reaches another column: which columns it may go to, directly or
+            # through other statuses. Fields a transition requires are not checked here: Jira lists some that
+            # are always filled (summary), its refusal says better what is missing.
             key = self.path[len("/transitions/"):]
             if not ISSUE_KEY.match(key):
                 self.send_json(400, {"message": "invalid issue key"})
                 return
-            self.relay(
-                f"{settings['jira_host']}/{TRANSITIONS_PATH.format(key=key)}",
-                "page"
+            try:
+                workflow, status, transitions = live_transitions(key)
+            except (OSError, http.client.HTTPException, JiraError, ValueError, KeyError) as error:
+                self.send_json(502, {"message": f"transitions unavailable: {error}"})
+                return
+            self.send_json(
+                200,
+                {
+                    "status": str(status["id"]),
+                    "transitions": transitions,
+                    "paths": {
+                        target: [{"id": step, "name": mirror.workflows.name(step)} for step in path]
+                        for target, path in mirror.workflows.routes(
+                            workflow,
+                            status["id"],
+                            transitions
+                        ).items()
+                    },
+                }
             )
 
         def host_allowed(self):

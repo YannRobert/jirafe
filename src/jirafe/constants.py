@@ -63,8 +63,9 @@ FIELD_ROLES = (
 )
 # Maximum number of board views: with the whole-board view, they fit on keys 1 to 9.
 MAX_VIEWS = 8
-# The history (changelog) comes in the same request as the issue: no extra call.
-ISSUE_EXPAND = "renderedFields,changelog"
+# The history (changelog) comes in the same request as the issue: no extra call. So do the transitions out
+# of its status, which teach the workflows' graph (workflow.py) without asking Jira for it.
+ISSUE_EXPAND = "renderedFields,changelog,transitions"
 CONFIG_PLACEHOLDER = b"__CONFIG__"
 # Below this age, the local copy of an issue (synced when the detail was opened or by the background sync)
 # is returned as is: reopening an issue or switching tabs costs no request to Jira.
@@ -72,7 +73,13 @@ ISSUE_FRESH_S = 30
 RANK_PATH = "rest/agile/1.0/issue/rank"
 ASSIGNEE_PATH = "rest/api/2/issue/{key}/assignee"
 TRANSITIONS_PATH = "rest/api/2/issue/{key}/transitions"
-TRANSITION_ID = re.compile(r"^[0-9]{1,10}$")
+# The status of an issue and the transitions out of it, in one read: a move plans its path from both.
+LIVE_TRANSITIONS_PATH = "rest/api/2/issue/{key}?fields=status,issuetype&expand=transitions"
+STATUS_ID = re.compile(r"^[0-9]{1,10}$")
+# A move to a status the workflow does not lead to directly goes through the statuses in between, one
+# transition each, going round the workflow if need be (from C back to B through D and A): the bound only
+# stops a walk that would never end.
+MAX_TRANSITION_STEPS = 20
 # Jira Server / Data Center login: letters (accented included), digits and the usual separators. Kept
 # narrow on purpose: whatever the page sends, only something shaped like a login reaches a Jira write.
 USER_LOGIN = re.compile(r"^[\w.@+'-]{1,255}$")

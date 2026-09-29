@@ -1,4 +1,5 @@
 """Jira test doubles: the tests make no network request."""
+import json
 from urllib.parse import parse_qs, urlsplit
 
 
@@ -42,6 +43,8 @@ class FakeUpstream:
             headers=None
     ):
         self.response = (status, body, headers or {"Content-Type": "application/json"})
+        # When set, answers each request instead of the fixed response.
+        self.responder = None
         self.requests = []
 
     def get(
@@ -66,4 +69,46 @@ class FakeUpstream:
             body=None
     ):
         self.requests.append({"method": method, "url": url, "headers": headers, "body": body})
+        if self.responder:
+            return self.responder(
+                method,
+                url,
+                body
+            )
         return self.response
+
+
+class FakeWorkflow:
+    """A Jira issue ABC-1 moving through a workflow: {status: {next status: transition id}}. Serves the
+    live transitions read and applies the transitions posted, refusing those listed in refused."""
+
+    def __init__(
+            self,
+            edges,
+            status
+    ):
+        self.edges = edges
+        self.status = status
+        self.refused = set()
+
+    def __call__(
+            self,
+            method,
+            url,
+            body
+    ):
+        if method == "POST":
+            transition = json.loads(body)["transition"]["id"]
+            if transition in self.refused:
+                return 400, b'{"errorMessages": [], "errors": {"resolution": "Resolution is required"}}', {}
+            self.status = next(to for to, id_ in self.edges[self.status].items() if id_ == transition)
+            return 204, b"", {}
+        issue = {
+            "key": "ABC-1",
+            "fields": {"status": {"id": self.status, "name": f"S{self.status}"}, "issuetype": {"id": "10"}},
+            "transitions": [
+                {"id": id_, "name": f"to S{to}", "to": {"id": to, "name": f"S{to}"}}
+                for to, id_ in self.edges[self.status].items()
+            ],
+        }
+        return 200, json.dumps(issue).encode(), {"Content-Type": "application/json"}

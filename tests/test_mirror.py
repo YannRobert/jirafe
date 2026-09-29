@@ -91,6 +91,25 @@ class IssueMirrorTest(unittest.TestCase):
     def test_missing_issue(self):
         self.assertIsNone(self.mirror().read("ABC-404"))
 
+    def test_transitions_teach_the_workflow_without_being_copied(self):
+        self.jira.issues[0]["fields"].update({"status": {"id": "1"}, "issuetype": {"id": "10"}})
+        self.jira.issues[0]["transitions"] = [{"id": "12", "name": "Start", "to": {"id": "2"}}]
+        self.jira.issues[0]["changelog"]["histories"].append(
+            {"items": [{"field": "status", "from": "2", "fromString": "S2", "to": "5", "toString": "S5"}]}
+        )
+        mirror = self.mirror()
+        mirror.sync_board()
+        self.assertNotIn("transitions", mirror.read("ABC-1")["data"])
+        self.assertEqual(
+            mirror.workflows.route(
+                "ABC/10",
+                "0",
+                "5",
+                [{"to": {"id": "1"}}]
+            ),
+            ["1", "2", "5"]
+        )
+
     def test_first_pass_full_then_incremental(self):
         mirror = self.mirror()
         mirror.sync_board()

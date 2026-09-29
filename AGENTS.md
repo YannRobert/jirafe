@@ -25,7 +25,8 @@ file lists what must be respected when changing it.
 - The `/jira/` relay only accepts `RELAYED_PREFIXES`. Only add a path the page reads, and never a prefix
   that would allow a write.
 - No JIRA write other than `PUT /rank`, `PUT /assignee` and `PUT /transition`, which require
-  `same_origin()` and build the body sent to JIRA themselves (`write_jira()`). A new write follows the same pattern: body built
+  `same_origin()` and build the body sent to JIRA themselves (`write_jira()`,
+  `send_to_jira()`). A new write follows the same pattern: body built
   server-side from validated inputs, never a body relayed as is.
 - The PAT must never reach the page (neither in the injected configuration nor in any response).
 

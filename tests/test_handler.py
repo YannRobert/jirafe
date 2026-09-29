@@ -10,7 +10,7 @@ from jirafe.constants import BASE_DETAIL_FIELDS
 from jirafe.handler import make_handler
 from jirafe.meter import RequestMeter
 from jirafe.mirror import IssueMirror
-from tests.fakes import FakeJira, FakeUpstream
+from tests.fakes import FakeJira, FakeUpstream, FakeWorkflow
 
 TOKEN = "secret-token"
 JIRA = "https://jira.example.com"
@@ -245,23 +245,62 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(status, 409)
         self.assertEqual(json.loads(body)["message"], "User cannot be assigned")
 
+    def move(
+            self,
+            payload,
+            origin=None
+    ):
+        return self.put(
+            "/transition",
+            payload,
+            origin
+        )
+
+    def workflow(self):
+        """1 → 2 → 3 → 4, 2 → 1 back; the path out of 2 is already known, as the board's issues teach it."""
+        workflow = FakeWorkflow(
+            {"1": {"2": "12"}, "2": {"3": "23", "1": "21"}, "3": {"4": "34"}, "4": {}},
+            "1"
+        )
+        self.upstream.responder = workflow
+        for status in ("2", "3"):
+            self.mirror.workflows.learn(
+                "ABC/10",
+                {"id": status},
+                [{"name": f"to S{to}", "to": {"id": to, "name": f"S{to}"}} for to in workflow.edges[status]]
+            )
+        return workflow
+
+    def posted(self):
+        return [json.loads(r["body"])["transition"]["id"] for r in self.upstream.requests if r["method"] == "POST"]
+
     def test_transitions_read_for_one_valid_key(self):
         for path in ("/transitions/abc-1", "/transitions/ABC-1/../../myself", "/transitions/ABC-1?x=1"):
             with self.subTest(path):
                 self.assertEqual(self.call("GET", path)[0], 400)
         self.assertEqual(self.upstream.requests, [])
-        status, _ = self.call("GET", "/transitions/ABC-1")
+        self.workflow()
+        status, body = self.call("GET", "/transitions/ABC-1")
         self.assertEqual(status, 200)
         request, = self.upstream.requests
         self.assertEqual(
             request["url"],
-            f"{JIRA}/rest/api/2/issue/ABC-1/transitions"
+            f"{JIRA}/rest/api/2/issue/ABC-1?fields=status,issuetype&expand=transitions"
+        )
+        answer = json.loads(body)
+        self.assertEqual(answer["status"], "1")
+        self.assertEqual(
+            {target: [step["id"] for step in path] for target, path in answer["paths"].items()},
+            {"2": ["2"], "3": ["2", "3"], "4": ["2", "3", "4"]}
+        )
+        self.assertEqual(
+            [step["name"] for step in answer["paths"]["4"]],
+            ["S2", "S3", "S4"]
         )
 
     def test_transition_refuses_other_origin(self):
-        status, _ = self.put(
-            "/transition",
-            {"issue": "ABC-1", "transition": "31"},
+        status, _ = self.move(
+            {"issue": "ABC-1", "status": "4"},
             origin="https://attacker.example"
         )
         self.assertEqual(status, 403)
@@ -270,44 +309,57 @@ class HandlerTest(unittest.TestCase):
     def test_transition_refuses_invalid_body(self):
         invalid = (
             {"issue": "ABC-1"},
-            {"issue": "abc-1", "transition": "31"},
-            {"issue": "ABC-1", "transition": 31},
-            {"issue": "ABC-1", "transition": "31&x=1"},
-            {"issue": "ABC-1", "transition": {"id": "31"}},
-            {"issue": "ABC-1", "transition": "1" * 11},
+            {"issue": "abc-1", "status": "4"},
+            {"issue": "ABC-1", "status": 4},
+            {"issue": "ABC-1", "status": "4&x=1"},
+            {"issue": "ABC-1", "status": {"id": "4"}},
+            {"issue": "ABC-1", "status": "1" * 11},
         )
         for payload in invalid:
             with self.subTest(payload):
-                self.assertEqual(self.put("/transition", payload)[0], 400)
+                self.assertEqual(self.move(payload)[0], 400)
         self.assertEqual(self.upstream.requests, [])
 
-    def test_transition_builds_body_sent_to_jira(self):
-        self.upstream.response = (204, b"", {})
-        status, body = self.put(
-            "/transition",
-            {"issue": "ABC-1", "transition": "31", "fields": {"resolution": "Done"}}
-        )
+    def test_transition_goes_through_the_statuses_in_between(self):
+        workflow = self.workflow()
+        status, body = self.move({"issue": "ABC-1", "status": "4", "transition": "99", "fields": {"x": 1}})
         self.assertEqual(status, 200)
         answer = json.loads(body)
-        self.assertEqual(answer["transitioned"], "ABC-1")
+        self.assertEqual(answer["through"], ["S2", "S3", "S4"])
         self.assertEqual(answer["issue"]["key"], "ABC-1")
-        request, = self.upstream.requests
-        self.assertEqual(request["method"], "POST")
-        self.assertEqual(
-            request["url"],
-            f"{JIRA}/rest/api/2/issue/ABC-1/transitions"
-        )
-        # Nothing but the transition id reaches Jira: fields sent by the page are ignored.
-        self.assertEqual(
-            json.loads(request["body"]),
-            {"transition": {"id": "31"}}
-        )
+        self.assertEqual(workflow.status, "4")
+        # Nothing but the transition ids of the path reaches Jira: what else the page sends is ignored.
+        self.assertEqual(self.posted(), ["12", "23", "34"])
+        for request in self.upstream.requests:
+            if request["method"] == "POST":
+                self.assertEqual(request["url"], f"{JIRA}/rest/api/2/issue/ABC-1/transitions")
 
-    def test_transition_reports_jira_refusal(self):
-        self.upstream.response = (400, b'{"errorMessages": ["Transition 31 is not valid"], "errors": {}}', {})
-        status, body = self.put("/transition", {"issue": "ABC-1", "transition": "31"})
+    def test_transition_goes_back_when_a_step_is_refused(self):
+        workflow = self.workflow()
+        workflow.refused.add("23")
+        status, body = self.move({"issue": "ABC-1", "status": "4"})
         self.assertEqual(status, 409)
-        self.assertEqual(json.loads(body)["message"], "Transition 31 is not valid")
+        self.assertEqual(
+            json.loads(body)["message"],
+            "to S3 refused: Resolution is required (back to S1)"
+        )
+        self.assertEqual(workflow.status, "1")
+        self.assertEqual(self.posted(), ["12", "23", "21"])
+
+    def test_transition_stays_where_it_cannot_go_back_from(self):
+        workflow = self.workflow()
+        workflow.refused.update({"23", "21"})
+        status, body = self.move({"issue": "ABC-1", "status": "4"})
+        self.assertEqual(status, 409)
+        self.assertIn("left in S2", json.loads(body)["message"])
+        self.assertEqual(workflow.status, "2")
+
+    def test_transition_without_known_path(self):
+        self.workflow()
+        status, body = self.move({"issue": "ABC-1", "status": "7"})
+        self.assertEqual(status, 409)
+        self.assertEqual(json.loads(body)["message"], "no known path from S1")
+        self.assertEqual(self.posted(), [])
 
     def test_issue(self):
         self.assertEqual(self.call("GET", "/issue/not-a-key")[0], 400)

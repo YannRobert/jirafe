@@ -271,7 +271,17 @@ try {
     background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: none;
     outline: 2px dashed color-mix(in srgb, var(--accent) 65%, transparent); outline-offset: -2px;
   }
-  .card.placeholder > * { visibility: hidden; }
+  .card.placeholder { position: relative; }
+  .card.placeholder > :not(.slot-status) { visibility: hidden; }
+  /* The status the issue will have if dropped here, where the eye already is: a column may hold several.
+     On the side the card does not cover: held by its top grip, it hangs below the pointer; by its bottom
+     one, above. */
+  .slot-status {
+    position: absolute; inset: 0; display: grid; justify-items: center; align-content: start; gap: 0.3rem;
+    padding: 0.4rem; text-align: center; font-size: 0.75rem; color: var(--muted);
+  }
+  .slot-status.bottom { align-content: end; }
+  .slot-status .status-pill { font-size: 0.85rem; padding: 0.15rem 0.6rem; }
   .drag-ghost {
     position: fixed; z-index: 1000; margin: 0; pointer-events: none; will-change: transform;
     box-shadow: 0 14px 30px rgba(0, 0, 0, .45), 0 0 0 2px var(--accent);
@@ -298,13 +308,15 @@ try {
   }
   .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
   .card .key { color: var(--muted); font-size: 0.8rem; }
-  /* Only the grip moves the card: anywhere else, pressing and dragging selects text, to copy it. Faint
-     until the card is hovered, so it does not clutter the board. */
+  /* Only the grips move the card: anywhere else, pressing and dragging selects text, to copy it. Faint
+     until the card is hovered, so it does not clutter the board. Two opposite corners, so that one is
+     always near the pointer; the four-arrow cursor tells the card can be picked up from there. */
   .card .id { display: flex; align-items: center; gap: 0.15rem; min-width: 0; }
   .card .grip {
-    flex: none; display: grid; place-items: center; width: 0.9rem; height: 1.1rem; margin-left: -0.3rem;
-    border-radius: 3px; color: var(--faint); opacity: 0.35; cursor: grab; user-select: none; touch-action: none;
+    flex: none; display: grid; place-items: center; width: 1.1rem; height: 1.25rem; margin-left: -0.35rem;
+    border-radius: 3px; color: var(--faint); opacity: 0.35; cursor: move; user-select: none; touch-action: none;
   }
+  .card .foot .grip { margin-left: auto; margin-right: -0.35rem; }
   .card .grip svg { width: 0.6rem; height: 0.95rem; }
   .card:hover .grip, .card:focus-visible .grip { opacity: 1; }
   .card .grip:hover { color: var(--text); background: var(--chip); }
@@ -497,6 +509,33 @@ try {
   .status-pill.new { background: var(--status-new); color: var(--status-new-fg); }
   .status-pill.indeterminate { background: var(--status-progress); color: var(--status-progress-fg); }
   .status-pill.done { background: var(--status-done); color: var(--status-done-fg); }
+  /* Confirmation of a move through several statuses: sized in rem so that it follows the page zoom, and
+     never wider nor taller than the window. */
+  .move-dialog {
+    width: min(34rem, calc(100vw - 2rem)); max-height: calc(100vh - 2rem); overflow: auto; box-sizing: border-box;
+    padding: 1.3rem 1.5rem 1.2rem; border: 1px solid var(--border); border-radius: 0.8rem;
+    background: var(--column); color: var(--text); box-shadow: 0 16px 48px rgba(0, 0, 0, .45);
+  }
+  .move-dialog::backdrop { background: rgba(0, 0, 0, .45); }
+  .move-dialog h2 { margin: 0 0 0.3rem; font-size: 1.15rem; font-weight: 600; }
+  .move-dialog .summary { margin: 0 0 1.1rem; color: var(--muted); font-size: 0.9rem; line-height: 1.35; }
+  .move-dialog ol { list-style: none; margin: 0 0 1rem; padding: 0; }
+  /* One status per line, joined by a rail: the path reads from top to bottom. */
+  .move-dialog li { position: relative; display: flex; align-items: center; gap: 0.7rem; padding: 0.3rem 0 0.3rem 1.6rem; }
+  .move-dialog li::before {
+    content: ""; position: absolute; left: 0.35rem; top: 50%; width: 0.6rem; height: 0.6rem; margin-top: -0.3rem;
+    border-radius: 50%; background: var(--faint);
+  }
+  .move-dialog li:not(:last-child)::after {
+    content: ""; position: absolute; left: calc(0.65rem - 1px); top: calc(50% + 0.4rem); height: calc(100% - 0.8rem);
+    border-left: 2px solid var(--border);
+  }
+  .move-dialog li.target::before { background: var(--accent); box-shadow: 0 0 0 3px var(--selected); }
+  .move-dialog li .transition { color: var(--faint); font-size: 0.8rem; }
+  .move-dialog li:first-child .transition { font-style: italic; }
+  .move-dialog .note { margin: 0 0 1.2rem; color: var(--faint); font-size: 0.8rem; line-height: 1.35; }
+  .move-dialog .actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
+  .move-dialog .actions .btn { padding: 0.45rem 1rem; font-size: 0.9rem; }
   .tag { padding: 0 0.35rem; border-radius: 3px; background: var(--chip); font-size: 0.8rem; }
   aside h4 { margin: 1.4rem 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.02em; }
   .rich { overflow-wrap: anywhere; }
@@ -582,6 +621,18 @@ try {
     <button type="button" class="to-top" id="panel-top" title="Back to the top of the detail" aria-label="Back to the top of the detail">↑</button>
   </nav>
 </aside>
+<dialog id="move-dialog" class="move-dialog" aria-labelledby="move-title">
+  <form method="dialog">
+    <h2 id="move-title"></h2>
+    <p class="summary" id="move-summary"></p>
+    <ol id="move-steps"></ol>
+    <p class="note">Each transition shows in the issue's history, and may notify people, as it would in Jira.</p>
+    <div class="actions">
+      <button class="btn" value="cancel">Cancel</button>
+      <button class="btn primary" value="move" id="move-confirm">Move</button>
+    </div>
+  </form>
+</dialog>
 
 <div class="tooltip" id="tooltip" role="tooltip" hidden></div>
 <div class="preview" id="preview" hidden><img alt=""><span class="loading">Loading…</span></div>
@@ -1385,7 +1436,7 @@ function firstName(
   return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
 }
 
-const GRIP = `<span class="grip" title="Drag to reorder" aria-hidden="true"><svg viewBox="0 0 6 10" fill="currentColor">` +
+const GRIP = `<span class="grip" title="Drag to move" aria-hidden="true"><svg viewBox="0 0 6 10" fill="currentColor">` +
   [1, 5].flatMap(x => [1, 5, 9].map(y => `<circle cx="${x}" cy="${y}" r="1"/>`)).join("") + `</svg></span>`;
 
 function card(
@@ -1402,7 +1453,7 @@ function card(
     (epic ? `<span class="epic" style="--epic:${EPIC_COLORS[epic.color] ?? "#c1c7d0"}" title="${escapeHtml(epic.key)}">${escapeHtml(epic.text)}</span>` : "") +
     `<div class="foot">${icon(board.types[issue.typeId])}${icon(board.priorities[issue.priorityId])}` +
     (issue.points != null ? `<span class="sp" title="Story points">${formatPoints(issue.points)}</span>` : "") +
-    `</div></a>`;
+    `${GRIP}</div></a>`;
 }
 
 function icon(entity) {
@@ -2210,7 +2261,7 @@ const AUTO_SCROLL_MAX_PX = 18;
 let drag = null;
 let suppressClick = false;
 
-// Neither the link nor selected text is dragged natively: the card is what moves, by its grip.
+// Neither the link nor selected text is dragged natively: the card is what moves, by one of its grips.
 document.addEventListener("dragstart", e => {
   if (e.target.closest?.(".card")) e.preventDefault();
 });
@@ -2223,7 +2274,7 @@ document.addEventListener("mousedown", e => {
 document.addEventListener("pointerdown", e => {
   const card = e.target.closest(".card .grip")?.closest(".card");
   if (!card || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.pointerType !== "mouse") return;
-  drag = { card, key: card.dataset.key, x: e.clientX, y: e.clientY, started: false };
+  drag = { card, key: card.dataset.key, x: e.clientX, y: e.clientY, byFoot: !!e.target.closest(".foot"), started: false };
 });
 
 document.addEventListener("pointermove", e => {
@@ -2302,7 +2353,10 @@ function followPointer() {
     column.classList.add(verdict.refused ? "drag-refused" : "drag-target");
     drag.ghost.dataset.hint = verdict.hint;
     if (!verdict.refused) drag.ghost.dataset.hintKind = "info";
+    showSlotStatus(verdict.route);
     if (verdict.refused) return;
+  } else {
+    showSlotStatus(null);
   }
   const cards = column.querySelector(".cards");
   movePlaceholder(
@@ -2311,12 +2365,69 @@ function followPointer() {
   );
 }
 
-// Several statuses may share a column: the first one a transition leads to, in the column's own order.
-function transitionTo(
-  list,
+function showSlotStatus(route) {
+  drag.card.querySelector(".slot-status")?.remove();
+  if (!route) return;
+  const status = currentBoard().statuses[route.statusId];
+  const label = document.createElement("span");
+  label.className = drag.byFoot ? "slot-status bottom" : "slot-status";
+  label.innerHTML = `<span>New status</span><span class="status-pill ${escapeHtml(status?.category ?? "")}">` +
+    `${escapeHtml(status?.name ?? route.steps.at(-1).name)}</span>`;
+  drag.card.append(label);
+}
+
+// Where a drop in the column leads: its first status a known path reaches, and the statuses on the way when
+// the workflow does not lead there directly.
+function routeTo(
+  transitions,
   column
 ) {
-  return currentBoard().columns[column].statusIds.map(id => list.find(t => String(t.to?.id) === String(id))).find(Boolean) ?? null;
+  // The board lists a column's statuses in the order its owner chose, the usual one first: the fewest
+  // transitions would rather pick a side exit (a column holding both Closed and Abandoned, one step away).
+  for (const id of currentBoard().columns[column].statusIds) {
+    const steps = transitions.paths?.[String(id)];
+    if (steps) return { statusId: String(id), steps };
+  }
+  return null;
+}
+
+// The page's own dialog rather than confirm(): it follows the theme and the zoom, and shows the path as a list.
+function confirmMove(
+  issue,
+  fromStatusId,
+  route,
+  columnName
+) {
+  const board = currentBoard();
+  const dialog = $("move-dialog");
+  const pill = (id, name) => {
+    const category = board.statuses[id]?.category ?? "";
+    return `<span class="status-pill ${escapeHtml(category)}">${escapeHtml(board.statuses[id]?.name ?? name)}</span>`;
+  };
+  $("move-title").textContent = `Move ${issue.key} to ${columnName}`;
+  $("move-summary").textContent = issue.summary ?? "";
+  $("move-steps").innerHTML =
+    `<li>${pill(fromStatusId, "")}<span class="transition">now</span></li>` +
+    route.steps.map((step, index) =>
+      `<li class="${index === route.steps.length - 1 ? "target" : ""}">${pill(step.id, step.name)}` +
+      `<span class="transition">transition ${index + 1} of ${route.steps.length}</span></li>`
+    ).join("");
+  dialog.returnValue = "cancel";
+  dialog.showModal();
+  $("move-confirm").focus();
+  return new Promise(resolve => dialog.addEventListener(
+    "close",
+    () => resolve(dialog.returnValue === "move"),
+    { once: true }
+  ));
+}
+
+function routeHint(
+  transitions,
+  route
+) {
+  if (route.steps.length === 1) return transitions.list.find(t => String(t.to?.id) === route.statusId)?.name ?? route.steps[0].name;
+  return `Through ${route.steps.slice(0, -1).map(step => step.name).join(", then ")} (${route.steps.length} transitions)`;
 }
 
 function columnVerdict(column) {
@@ -2332,13 +2443,22 @@ function columnVerdict(column) {
   if (!list) return { refused: false, hint: "Checking the transitions…" };
   const board = currentBoard();
   const index = Number(column.dataset.col);
-  const transition = transitionTo(
-    list,
+  const route = routeTo(
+    current.transitions,
     index
   );
-  if (transition) return { refused: false, hint: transition.name };
+  if (route) {
+    return {
+      refused: false,
+      route,
+      hint: routeHint(
+        current.transitions,
+        route
+      ),
+    };
+  }
   const status = board.statuses[board.issues.find(i => i.key === current.key)?.statusId]?.name ?? "its status";
-  return { refused: true, hint: `No transition from ${status} to ${board.columns[index].name}` };
+  return { refused: true, hint: `No known path from ${status} to ${board.columns[index].name}` };
 }
 
 // A read, made once per drag and only when the card leaves its column.
@@ -2349,6 +2469,7 @@ function loadTransitions(key) {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || body.errorMessages?.join(", ") || response.statusText);
       result.list = body.transitions ?? [];
+      result.paths = body.paths ?? {};
     })
     .catch(error => { result.error = error.message; })
     .then(() => result);
@@ -2426,8 +2547,8 @@ function dropCard(cancelled) {
   const refused = document.querySelector(".column.drag-refused");
   const landed = card.closest(".column");
   // Jira may answer after the pointer left the slot's column: it counts as a drop on it.
-  const unreachable = landed !== current.origin && (current.transitions?.error || current.transitions?.list && !transitionTo(
-    current.transitions.list,
+  const unreachable = landed !== current.origin && (current.transitions?.error || current.transitions?.list && !routeTo(
+    current.transitions,
     Number(landed.dataset.col)
   ));
   if (cancelled || refused || unreachable) cards.insertBefore(card, current.home);
@@ -2445,6 +2566,7 @@ function dropCard(cancelled) {
   landing.finished.catch(() => null).then(() => {
     ghost.remove();
     card.classList.remove("placeholder");
+    card.querySelector(".slot-status")?.remove();
     document.querySelectorAll(".drag-origin, .drag-refused, .drag-target").forEach(el => el.classList.remove("drag-origin", "drag-refused", "drag-target"));
     document.body.classList.remove("card-dragging");
     const previous = card.previousElementSibling?.dataset.key;
@@ -2494,8 +2616,9 @@ async function rankIssue(
   }
 }
 
-// Same in another column: the card shows there right away, in the status the transition leads to; if Jira
-// has no such transition or refuses it (a field its screen requires, for instance), it goes back.
+// Same in another column: the card shows there right away, in the status the move leads to; if Jira has no
+// path there or refuses a step (a field its screen requires, for instance), it goes back. A path of several
+// transitions is confirmed first: each one leaves a trace in the issue's history, and may notify people.
 async function moveIssue(
   key,
   column,
@@ -2509,12 +2632,18 @@ async function moveIssue(
     issue.statusId = statusId;
     issue.done = board.statuses[statusId]?.category === "done";
   };
-  let transition = transitions.list && transitionTo(
-    transitions.list,
+  const undo = () => {
+    board.issues = before.issues;
+    show(before.statusId);
+    issue.done = before.done;
+    if (currentBoard() === board) renderBoard();
+  };
+  let route = transitions.list && routeTo(
+    transitions,
     column
   );
-  // Jira has not answered yet: the column's first status, until the transition is known.
-  show(transition?.to.id ?? board.columns[column].statusIds[0]);
+  // Jira has not answered yet: the column's first status, until the path is known.
+  show(route?.statusId ?? board.columns[column].statusIds[0]);
   if (neighbour) {
     placeIssue(
       board,
@@ -2524,28 +2653,42 @@ async function moveIssue(
   }
   renderBoard();
   try {
-    if (!transition) {
+    if (!route) {
       const { list, error } = await transitions.promise;
       if (error) throw new Error(error);
-      transition = transitionTo(
-        list,
+      route = routeTo(
+        transitions,
         column
       );
-      if (!transition) throw new Error("no transition leads there from its status");
-      show(transition.to.id);
+      if (!route) throw new Error("no known path leads there from its status");
+      show(route.statusId);
       if (currentBoard() === board) renderBoard();
+    }
+    if (route.steps.length > 1 && !await confirmMove(
+      issue,
+      before.statusId,
+      route,
+      board.columns[column].name
+    )) {
+      undo();
+      return;
     }
     const body = await write(
       "/transition",
-      { issue: key, transition: String(transition.id) }
+      { issue: key, status: route.statusId }
     );
     remember(body.issue);
     if (state.openKey === key) rerenderDetail();
   } catch (error) {
-    board.issues = before.issues;
-    show(before.statusId);
-    issue.done = before.done;
-    if (currentBoard() === board) renderBoard();
+    undo();
+    // Stopped halfway without being able to go back: the card shows where the issue really is.
+    const reached = error.body?.issue?.data?.fields?.status?.id;
+    if (error.body?.issue) remember(error.body.issue);
+    if (reached && String(reached) !== String(before.statusId)) {
+      show(String(reached));
+      if (currentBoard() === board) renderBoard();
+    }
+    if (state.openKey === key) rerenderDetail();
     flashError(`${key} could not be moved to ${board.columns[column].name}: ${error.message}`);
     return;
   }
@@ -2582,7 +2725,8 @@ async function write(
     body: JSON.stringify(payload),
   });
   const body = await response.json().catch(() => ({}));
-  if (!response.ok) throw new Error(body.message || response.statusText);
+  // The body stays with the error: a refused move says there where the issue ended up.
+  if (!response.ok) throw Object.assign(new Error(body.message || response.statusText), { body });
   return body;
 }
 
@@ -2807,6 +2951,8 @@ document.addEventListener("input", e => {
 });
 
 document.addEventListener("keydown", e => {
+  // A dialog open: its own keys (Escape cancels, Enter confirms), none of the board's.
+  if (document.querySelector("dialog[open]")) return;
   if (e.key === "Escape" && drag?.started) {
     dropCard(true);
     return;

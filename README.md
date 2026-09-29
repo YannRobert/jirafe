@@ -13,9 +13,18 @@ reads from the cache instead of waiting for Jira. Navigation is instant, without
 the board and open issues are kept up to date without you having to press F5.
 
 **Mostly for reading, with a few edits.** Jirafe was designed for consulting the board, but it can
-already move issues by dragging a card by its grip (⠿): within its column to reorder it, or to another
-column to change its status (only columns a Jira transition leads to accept it). It can also change an
-issue's assignee from the detail panel (click the assignee, or press `A`).
+already move issues by dragging a card by one of its grips (⠿, top left and bottom right): within its column to reorder it, or to another
+column to change its status. It can also change an issue's assignee from the detail panel (click the
+assignee, or press `A`).
+
+**Moving an issue where the workflow does not lead directly.** When the workflow only reaches a status
+through others (A → B → C → D, or from C back to B through D and A), dropping the card in the target
+column is enough: Jirafe finds the shortest path, asks for confirmation, and applies the transitions one
+after the other. A column holding several statuses leads to the first one of the board's configuration that a
+path reaches. If Jira refuses one of them (a required field, a condition), the issue is brought back to
+its starting status when the workflow allows it. Jira only shows a workflow to its administrators: Jirafe
+learns it from the transitions Jira offers for the board's issues and from the status changes in their
+history, and keeps it in the local copy. A column no known path leads to refuses the card.
 
 **Sharing a list of issues.** `Ctrl+C` copies the open issue, or the cards picked with Ctrl + click
 (Cmd + click on a Mac) or Shift + click (a range), one line per issue (key and summary; with a link to
@@ -134,10 +143,10 @@ browser ──► http://localhost:8766 ──► Jira
 | `GET /` | the page (`src/jirafe/static/index.html`, configuration injected) |
 | `GET /jira/<path>` | relay to Jira, restricted to an allow-list of paths |
 | `GET /issue/<key>` | local copy of the issue; `?sync=1` resyncs it (`&force=1` ignores freshness) |
-| `GET /transitions/<key>` | transitions available from the issue's status |
+| `GET /transitions/<key>` | transitions available from the issue's status, and the known paths to the others |
 | `PUT /rank` | reorders an issue on the board — one of the three possible writes |
 | `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
-| `PUT /transition` | applies a transition to an issue (changes its status) |
+| `PUT /transition` | brings an issue to a status, through the transitions of the path |
 | `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
 | `GET /changes` | when the background sync last found a changed issue; tells the server a page is watching |
 | `GET /mirror/status` | state of the local copy |
@@ -166,7 +175,7 @@ It is a cache: it can be deleted, and it rebuilds itself at the next launch.
 - Only `GET` is relayed, and only to the paths the page reads.
 - The only three writes (`PUT /rank`, `PUT /assignee` and `PUT /transition`) require the same origin and
   a JSON body; the server builds the Jira request itself from validated values (issue keys, a user login,
-  a transition id).
+  a status id, whose path is made of the transitions Jira offers).
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -181,6 +190,8 @@ src/jirafe/
   upstream.py             connections to Jira (proxy, reuse)
   jira.py                 JSON reads from Jira
   mirror.py               local copy of issues, background sync
+  workflow.py             workflows' graph, learned from the issues, and paths between statuses
+  files.py                atomic JSON file writes
   meter.py                counter of requests to Jira
   config.py, paths.py     configuration file, per-system locations
   constants.py            constants

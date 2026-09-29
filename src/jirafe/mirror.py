@@ -1,6 +1,5 @@
 import http.client
 import json
-import os
 import threading
 import time
 from datetime import datetime, timezone
@@ -11,14 +10,14 @@ from .constants import (
     BASE_DETAIL_FIELDS,
     FULL_SYNC_INTERVAL_S,
     ISSUE_EXPAND,
-    REPLACE_ATTEMPTS,
-    REPLACE_RETRY_DELAY_S,
     SEARCH_PAGE_SIZE,
     SYNC_OVERLAP_MIN,
     WATCH_INTERVAL_S,
     WATCH_TTL_S,
 )
+from .files import write_json
 from .jira import JiraError
+from .workflow import Workflows, workflow_of
 
 
 class IssueMirror:
@@ -41,6 +40,7 @@ class IssueMirror:
         self._signature = f"{fields}&expand={ISSUE_EXPAND}"
         self._lock = threading.Lock()
         self._watched_at = None
+        self.workflows = Workflows(Path(directory) / str(board_id) / "workflows.json")
         # Last time a pass found an issue that differs from its local copy (epoch seconds): the page reloads
         # its board when it is older.
         self.changed_at = None
@@ -103,7 +103,7 @@ class IssueMirror:
                 state["fullSyncAt"] = now
                 state["fields"] = self._signature
             state["lastCount"] = written
-            self._write_json(
+            write_json(
                 self._state_file,
                 state
             )
@@ -150,10 +150,24 @@ class IssueMirror:
                 return
 
     def _write(self, issue):
+        # Only the workflow's graph needs them: the transitions of the moment are read again before a move.
+        transitions = issue.pop("transitions", None)
+        if transitions is not None:
+            self.workflows.learn(
+                workflow_of(issue),
+                issue["fields"]["status"],
+                transitions
+            )
         if "changelog" in issue:
+            # Before slimming: the history's status changes carry the status ids the workflow's graph needs.
+            if "issuetype" in issue["fields"]:
+                self.workflows.learn_history(
+                    workflow_of(issue),
+                    issue["changelog"].get("histories", [])
+                )
             issue["changelog"] = {"histories": [slim_history(history) for history in issue["changelog"].get("histories", [])]}
         entry = {"key": issue["key"], "syncedAt": iso(time.time()), "data": issue}
-        self._write_json(
+        write_json(
             self._issues / f"{issue['key']}.json",
             entry
         )
@@ -164,31 +178,6 @@ class IssueMirror:
             return json.loads(self._state_file.read_bytes())
         except (FileNotFoundError, ValueError):
             return {}
-
-    @staticmethod
-    def _write_json(
-            path,
-            payload
-    ):
-        # One temporary file per thread: the background sync and an on-demand sync may write the same issue
-        # at the same time.
-        temporary = path.with_suffix(f".{threading.get_ident()}.tmp")
-        temporary.write_text(
-            json.dumps(payload, ensure_ascii=False),
-            encoding="utf-8"
-        )
-        for attempt in range(1, REPLACE_ATTEMPTS + 1):
-            try:
-                os.replace(
-                    temporary,
-                    path
-                )
-                return
-            except PermissionError:
-                if attempt == REPLACE_ATTEMPTS:
-                    temporary.unlink(missing_ok=True)
-                    raise
-                time.sleep(REPLACE_RETRY_DELAY_S)
 
 
 def detail_fields(custom_fields):
