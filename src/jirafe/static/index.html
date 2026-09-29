@@ -427,6 +427,31 @@ try {
   aside .links .status-pill { flex: none; }
   aside .facts dt { color: var(--muted); }
   aside .facts dd { margin: 0; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+  /* The assignee is itself the button: the field looks like the others until hovered. */
+  aside .facts .assign {
+    display: inline-flex; align-items: center; gap: 0.35rem; margin: -0.15rem -0.35rem; padding: 0.15rem 0.35rem;
+    border: 1px dashed transparent; border-radius: 4px; background: none; font: inherit; cursor: pointer;
+  }
+  aside .facts .assign:hover, aside .facts .assign:focus-visible { border-color: var(--faint); background: var(--column); }
+  aside .facts .assign.pending { opacity: 0.6; cursor: progress; }
+  .picker { position: relative; width: 100%; max-width: 20rem; }
+  .picker input {
+    width: 100%; box-sizing: border-box; padding: 0.25rem 0.5rem; font: inherit; color: var(--text);
+    background: var(--card); border: 1px solid var(--accent); border-radius: 4px; outline: none;
+  }
+  .picker ul {
+    position: absolute; z-index: 5; left: 0; right: 0; top: calc(100% + 2px); max-height: 16rem; overflow-y: auto;
+    margin: 0; padding: 0.25rem 0; list-style: none; background: var(--card); border: 1px solid var(--border);
+    border-radius: 4px; box-shadow: var(--panel-shadow);
+  }
+  .picker li { display: flex; align-items: center; gap: 0.45rem; padding: 0.3rem 0.6rem; cursor: pointer; }
+  .picker li:hover { background: var(--card-hover); }
+  .picker li.active { background: var(--selected); }
+  .picker li.current .name::after { content: " ✓"; color: var(--accent); }
+  .picker li .login { margin-left: auto; padding-left: 0.6rem; color: var(--faint); font-size: 0.75rem; }
+  .picker li.search .name { color: var(--link); }
+  .picker li.hint { color: var(--muted); cursor: default; }
+  .picker li.hint:hover { background: none; }
   .status-pill { padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
   .status-pill.new { background: var(--status-new); color: var(--status-new-fg); }
   .status-pill.indeterminate { background: var(--status-progress); color: var(--status-progress-fg); }
@@ -542,6 +567,11 @@ const DETAIL_FRESH_MS = 30 * 1000;
 const DETAIL_POLL_MS = 15 * 1000;
 const DETAIL_CACHE_SIZE = 80;
 const HOVER_PREFETCH_MS = 120;
+// Asking Jira for people is a request: only after a pause in typing, from a few letters, and only when
+// nobody known to the page matches (otherwise on demand, through the "Search Jira" entry).
+const PEOPLE_SEARCH_DELAY_MS = 300;
+const PEOPLE_SEARCH_MIN_CHARS = 2;
+const PEOPLE_SEARCH_SIZE = 20;
 // Labels shown upfront as buttons; the others go in the drop-down list.
 const TOP_LABELS = 5;
 // A label carried by more than this share of the sprint filters too little to earn a button by default.
@@ -606,6 +636,8 @@ const state = {
   detailLoading: new Map(),
   openKey: null,
   detailSyncing: null,
+  picker: null,
+  assigning: new Set(),
   autoRefresh: readPreference(AUTO_REFRESH_KEY) !== "false",
   dock: readPreference(DOCK_KEY) === "bottom" ? "bottom" : "side",
   view: VIEWS.some(v => v.id === readPreference(VIEW_KEY)) ? readPreference(VIEW_KEY) : VIEWS[0]?.id ?? "all",
@@ -669,6 +701,8 @@ async function ensureMeta() {
     at: Date.now(),
     boardName: model.name ?? model.rapidView?.name ?? `Board ${CONFIG.boardId}`,
     me: me.name,
+    meName: me.displayName,
+    meAvatar: me.avatarUrls?.["48x48"] ?? null,
     quickFilters: (model.quickFilterConfig?.quickFilters ?? []).map(f => ({ id: f.id, name: f.name, query: f.query, description: f.description })),
   };
 }
@@ -1513,6 +1547,7 @@ function prefetchLocal(key) {
 
 async function openDetail(key) {
   state.openKey = key;
+  if (state.picker?.key !== key) state.picker = null;
   for (const el of document.querySelectorAll(".card.selected")) el.classList.remove("selected");
   const cardEl = document.querySelector(`.card[data-key="${CSS.escape(key)}"]`);
   cardEl?.classList.add("selected");
@@ -1572,7 +1607,7 @@ async function syncDetail(
 // What the background sync has written since opening is shown without asking Jira anything.
 async function reloadOpenDetail() {
   const key = state.openKey;
-  if (!key || document.hidden || state.detailSyncing === key || drag?.started) return;
+  if (!key || document.hidden || state.detailSyncing === key || drag?.started || state.picker) return;
   const entry = await fetchIssue(
     key,
     "local"
@@ -1586,6 +1621,7 @@ async function reloadOpenDetail() {
 
 function closeDetail() {
   hidePreview();
+  state.picker = null;
   state.openKey = null;
   state.openToken = null;
   $("panel").hidden = true;
@@ -1619,7 +1655,10 @@ function renderDetail(
     ["Criticality", custom(f, "criticality") ? escapeHtml(custom(f, "criticality").value) : null],
     ["Story points", points != null ? `<span class="sp">${formatPoints(points)}</span>` : "—"],
     GROUP,
-    ["Assignee", person(f ? f.assignee : issue && { name: issue.assignee, displayName: issue.assigneeName, avatarUrls: { "48x48": issue.avatar } })],
+    ["Assignee", assigneeHtml(
+      key,
+      f ? f.assignee : issue && { name: issue.assignee, displayName: issue.assigneeName, avatarUrls: { "48x48": issue.avatar } }
+    )],
     ["Developer", custom(f, "developer") ? person(custom(f, "developer")) : null],
     ["Tester", custom(f, "tester") ? person(custom(f, "tester")) : null],
     ["Reporter", f ? person(f.reporter) : null],
@@ -1652,6 +1691,12 @@ function renderDetail(
   panelScrollers().forEach((el, index) => { el.scrollTop = positions[index] ?? 0; });
   if (!sameTicket) $("panel-top").classList.remove("shown");
   renderJump();
+  if (state.picker?.key === key) {
+    renderPickerOptions();
+    const input = $("assignee-query");
+    input.focus({ preventScroll: true });
+    input.setSelectionRange(input.value.length, input.value.length);
+  }
 }
 
 // Separator between two groups of fields: state, people, planning, dates.
@@ -2109,6 +2154,198 @@ function flashError(message) {
   setTimeout(() => banner.remove(), 8000);
 }
 
+// ---------- Assignee ----------
+
+function assigneeHtml(
+  key,
+  user
+) {
+  if (state.picker?.key === key) {
+    return `<div class="picker"><input id="assignee-query" type="text" autocomplete="off" spellcheck="false" ` +
+      `placeholder="Search people…" aria-label="New assignee" aria-controls="assignee-options" value="${escapeHtml(state.picker.query)}">` +
+      `<ul id="assignee-options" role="listbox"></ul></div>`;
+  }
+  const pending = state.assigning.has(key);
+  return `<button type="button" class="assign${pending ? " pending" : ""}" title="${pending ? "Saving in Jira…" : "Change the assignee (A)"}"` +
+    `${pending ? " disabled" : ""}>${person(user)}</button>`;
+}
+
+function currentAssignee(key) {
+  const fields = state.detail.get(key)?.data?.fields;
+  return fields ? fields.assignee?.name ?? null : currentBoard()?.issues.find(i => i.key === key)?.assignee ?? null;
+}
+
+// People the page already knows, at no cost: me, the people of the open issue, the assignees of the loaded
+// sprints. Me first, then by name.
+function knownPeople(key) {
+  const people = new Map();
+  const add = (login, name, url) => {
+    if (login && !people.has(login.toLowerCase())) people.set(login.toLowerCase(), { login, name: name || login, avatar: url ?? null });
+  };
+  if (state.meta?.me) add(state.meta.me, state.meta.meName, state.meta.meAvatar);
+  const f = state.detail.get(key)?.data?.fields;
+  for (const user of [f?.assignee, f?.reporter, custom(f, "developer"), custom(f, "tester")]) add(user?.name, user?.displayName, user?.avatarUrls?.["48x48"]);
+  for (const board of Object.values(state.boards)) for (const i of board.issues) add(i.assignee, i.assigneeName, i.avatar);
+  const isMe = p => p.login.toLowerCase() === state.meta?.me?.toLowerCase();
+  return [...people.values()].sort((a, b) => isMe(b) - isMe(a) || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+function pickerOptions() {
+  const picker = state.picker;
+  const typed = picker.query.trim();
+  const query = normalize(typed);
+  const matches = p => normalize(`${p.name} ${p.login}`).includes(query);
+  const people = new Map();
+  for (const p of knownPeople(picker.key)) if (matches(p)) people.set(p.login.toLowerCase(), p);
+  // Jira also matches e-mail addresses: its answer to the current query is kept as is.
+  for (const p of picker.remote) {
+    if (!people.has(p.login.toLowerCase()) && (picker.remoteQuery === typed || matches(p))) people.set(p.login.toLowerCase(), p);
+  }
+  const options = [...people.values()].map(p => ({ person: p }));
+  if (!query || normalize("Unassigned").includes(query)) {
+    const afterMe = options[0]?.person.login.toLowerCase() === state.meta?.me?.toLowerCase() ? 1 : 0;
+    options.splice(afterMe, 0, { person: null });
+  }
+  if (typed.length >= PEOPLE_SEARCH_MIN_CHARS && picker.remoteQuery !== typed) options.push({ search: typed });
+  return options;
+}
+
+function renderPickerOptions() {
+  const list = $("assignee-options");
+  const picker = state.picker;
+  if (!list || !picker) return;
+  picker.options = pickerOptions();
+  picker.active = Math.min(picker.active, Math.max(picker.options.length - 1, 0));
+  const current = currentAssignee(picker.key)?.toLowerCase() ?? null;
+  const items = picker.options.map((option, index) => {
+    const classes = [index === picker.active ? "active" : ""];
+    let content;
+    if ("search" in option) {
+      classes.push("search");
+      content = `<span class="name">Search Jira for “${escapeHtml(option.search)}”</span>`;
+    } else if (option.person) {
+      if (option.person.login.toLowerCase() === current) classes.push("current");
+      content = `${avatar(option.person.login, option.person.name, option.person.avatar)}` +
+        `<span class="name">${escapeHtml(option.person.name)}</span><span class="login">${escapeHtml(option.person.login)}</span>`;
+    } else {
+      if (current === null) classes.push("current");
+      content = `${avatar(null)}<span class="name">Unassigned</span>`;
+    }
+    return `<li role="option" data-index="${index}" class="${classes.filter(Boolean).join(" ")}" aria-selected="${index === picker.active}">${content}</li>`;
+  });
+  if (picker.searching) items.push(`<li class="hint">Searching Jira…</li>`);
+  else if (picker.searchError) items.push(`<li class="hint">Search failed: ${escapeHtml(picker.searchError)}</li>`);
+  else if (!picker.options.length) items.push(`<li class="hint">Nobody found</li>`);
+  list.innerHTML = items.join("");
+  list.querySelector(".active")?.scrollIntoView({ block: "nearest" });
+}
+
+function rerenderDetail() {
+  if (state.openKey) renderDetail(state.openKey, { syncing: state.detailSyncing === state.openKey });
+}
+
+function openPicker() {
+  const key = state.openKey;
+  if (!key || state.assigning.has(key)) return;
+  state.picker = { key, query: "", active: 0, options: [], remote: [], remoteQuery: null, searching: false, searchError: null, timer: 0 };
+  rerenderDetail();
+}
+
+function closePicker() {
+  if (!state.picker) return;
+  clearTimeout(state.picker.timer);
+  state.picker = null;
+  rerenderDetail();
+}
+
+function onPickerInput(value) {
+  const picker = state.picker;
+  picker.query = value;
+  picker.active = 0;
+  picker.searchError = null;
+  clearTimeout(picker.timer);
+  renderPickerOptions();
+  const typed = value.trim();
+  const nobodyKnown = picker.options.every(option => !option.person);
+  if (typed.length >= PEOPLE_SEARCH_MIN_CHARS && nobodyKnown) {
+    picker.timer = setTimeout(() => searchPeople(typed), PEOPLE_SEARCH_DELAY_MS);
+  }
+}
+
+async function searchPeople(query) {
+  const picker = state.picker;
+  if (!picker || picker.searching) return;
+  picker.searching = true;
+  renderPickerOptions();
+  try {
+    // Dots encoded: the relay refuses any path containing "..", a query included.
+    const users = await jira(`rest/api/2/user/assignable/search?issueKey=${encodeURIComponent(picker.key)}` +
+      `&username=${encodeURIComponent(query).replace(/\./g, "%2E")}&maxResults=${PEOPLE_SEARCH_SIZE}`);
+    picker.remote = users.filter(u => u.active !== false).map(u => ({ login: u.name, name: u.displayName || u.name, avatar: u.avatarUrls?.["48x48"] ?? null }));
+    picker.remoteQuery = query;
+  } catch (error) {
+    picker.searchError = error.message;
+  } finally {
+    picker.searching = false;
+    if (state.picker === picker) renderPickerOptions();
+  }
+}
+
+function choosePickerOption(option) {
+  if (!option) return;
+  if ("search" in option) {
+    searchPeople(option.search);
+    return;
+  }
+  const key = state.picker.key;
+  closePicker();
+  if ((option.person?.login ?? "").toLowerCase() !== (currentAssignee(key) ?? "").toLowerCase()) {
+    assignIssue(
+      key,
+      option.person
+    );
+  }
+}
+
+// Same as reordering: the new assignee shows right away, and goes back if Jira refuses.
+async function assignIssue(
+  key,
+  user
+) {
+  const board = currentBoard();
+  const issue = board?.issues.find(i => i.key === key);
+  const previousIssue = issue && { assignee: issue.assignee, assigneeName: issue.assigneeName, avatar: issue.avatar };
+  const previousEntry = state.detail.get(key);
+  if (issue) Object.assign(issue, { assignee: user?.login ?? null, assigneeName: user?.name ?? null, avatar: user?.avatar ?? null });
+  if (previousEntry?.data?.fields) {
+    const assignee = user && { name: user.login, displayName: user.name, avatarUrls: { "48x48": user.avatar } };
+    remember({ ...previousEntry, data: { ...previousEntry.data, fields: { ...previousEntry.data.fields, assignee } } });
+  }
+  state.assigning.add(key);
+  renderBoard();
+  if (state.openKey === key) rerenderDetail();
+  try {
+    const response = await fetch("/assignee", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ issue: key, assignee: user?.login ?? null }),
+    });
+    const body = await response.json().catch(() => ({}));
+    if (!response.ok) throw new Error(body.message || response.statusText);
+    // The server resynced its copy after the write: the detail shows what Jira now holds.
+    remember(body.issue);
+    saveSnapshot();
+  } catch (error) {
+    if (issue) Object.assign(issue, previousIssue);
+    if (previousEntry) remember(previousEntry);
+    if (currentBoard() === board) renderBoard();
+    flashError(`${key} could not be assigned: ${error.message}`);
+  } finally {
+    state.assigning.delete(key);
+    if (state.openKey === key) rerenderDetail();
+  }
+}
+
 let hoverTimer = null;
 document.addEventListener("mouseover", e => {
   const cardEl = e.target.closest(".card");
@@ -2128,6 +2365,12 @@ document.addEventListener("keydown", e => {
     dropCard(true);
     return;
   }
+  if (e.key === "Escape" && state.picker) {
+    e.preventDefault();
+    closePicker();
+    $("panel-content").querySelector(".assign")?.focus({ preventScroll: true });
+    return;
+  }
   if (e.key === "Escape" && !$("load-panel").hidden) {
     toggleLoadPanel(false);
     return;
@@ -2145,6 +2388,9 @@ document.addEventListener("keydown", e => {
     $("q")?.focus();
   } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "d") {
     toggleDock();
+  } else if (state.openKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "a") {
+    e.preventDefault();
+    openPicker();
   } else if (!e.ctrlKey && !e.metaKey && !e.altKey && VIEWS.some(v => v.key === e.key)) {
     setView(VIEWS.find(v => v.key === e.key).id);
   } else if (state.openKey && e.key === "Enter" && !e.target.closest?.("button, a:not(.card)")) {
@@ -2305,6 +2551,36 @@ $("panel-content").addEventListener("mouseout", event => {
   if (link && !link.contains(event.relatedTarget)) hidePreview();
 });
 $("panel-content").addEventListener("scroll", hidePreview, { passive: true, capture: true });
+
+$("panel-content").addEventListener("click", event => {
+  if (event.target.closest(".assign")) openPicker();
+  const option = event.target.closest("#assignee-options li[data-index]");
+  if (option && state.picker) choosePickerOption(state.picker.options[Number(option.dataset.index)]);
+});
+$("panel-content").addEventListener("input", event => {
+  if (event.target.id === "assignee-query" && state.picker) onPickerInput(event.target.value);
+});
+$("panel-content").addEventListener("keydown", event => {
+  const picker = state.picker;
+  if (event.target.id !== "assignee-query" || !picker) return;
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    event.preventDefault();
+    const count = picker.options.length;
+    if (count) picker.active = (picker.active + (event.key === "ArrowDown" ? 1 : count - 1)) % count;
+    renderPickerOptions();
+  } else if (event.key === "Enter") {
+    event.preventDefault();
+    choosePickerOption(picker.options[picker.active]);
+  } else if (event.key === "Tab") {
+    closePicker();
+  }
+});
+// A click in the list keeps the focus in the field; a click anywhere else closes the picker.
+document.addEventListener("mousedown", event => {
+  if (!state.picker) return;
+  if (event.target.closest("#assignee-options")) event.preventDefault();
+  else if (!event.target.closest(".picker")) closePicker();
+});
 
 $("panel-sections").addEventListener("click", event => {
   const target = event.target.closest("button[data-target]")?.dataset.target;

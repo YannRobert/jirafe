@@ -7,6 +7,7 @@ from http.server import BaseHTTPRequestHandler
 from urllib.parse import parse_qs, urlsplit
 
 from .constants import (
+    ASSIGNEE_PATH,
     CONFIG_PLACEHOLDER,
     FORWARDED_RESPONSE_HEADERS,
     IMAGE_MAX_AGE_S,
@@ -17,6 +18,7 @@ from .constants import (
     RANK_PATH,
     RELAYED_PREFIXES,
     STATIC_DIR,
+    USER_LOGIN,
 )
 from .jira import JiraError
 
@@ -73,67 +75,110 @@ def make_handler(
         def do_PUT(self):
             if not self.host_allowed() or not self.same_origin():
                 return
-            if self.path != "/rank":
+            route = {"/rank": self.put_rank, "/assignee": self.put_assignee}.get(self.path)
+            if route is None:
                 self.send_json(404, {"message": "not found"})
                 return
+            request = self.read_json_body()
+            if request is not None:
+                route(request)
+
+        def read_json_body(self):
             length = int(self.headers.get("Content-Length") or 0)
             if not 0 < length <= MAX_WRITE_BODY_BYTES:
                 self.close_connection = True
                 self.send_json(400, {"message": "missing or oversized body"})
-                return
+                return None
             try:
                 request = json.loads(self.rfile.read(length))
-                key, before, after = request["issue"], request.get("before"), request.get("after")
-            except (ValueError, KeyError, TypeError):
-                self.send_json(400, {"message": "expected JSON body: {issue, before | after}"})
-                return
+            except ValueError:
+                request = None
+            if not isinstance(request, dict):
+                self.send_json(400, {"message": "expected a JSON object"})
+                return None
+            return request
+
+        def put_rank(self, request):
+            key, before, after = request.get("issue"), request.get("before"), request.get("after")
             neighbour = before or after
             if (before is None) == (after is None) or not all(isinstance(k, str) and ISSUE_KEY.match(k) for k in (key, neighbour)):
                 self.send_json(400, {"message": "one issue key, and exactly one neighbour (before or after)"})
                 return
-            self.rank(
-                key,
-                "rankBeforeIssue" if before else "rankAfterIssue",
-                neighbour
+            position = "rankBeforeIssue" if before else "rankAfterIssue"
+            response = self.write_jira(
+                RANK_PATH,
+                {"issues": [key], position: neighbour}
             )
+            if response is None:
+                return
+            status, body = response
+            # 204: ranked. 207: one response per issue, ours included, which may carry a refusal.
+            if status == 207:
+                entries = json.loads(body or b"{}").get("entries", [])
+                errors = [message for entry in entries if entry.get("status", 200) >= 400 for message in entry.get("errors", ["refused"])]
+            else:
+                errors = jira_errors(
+                    status,
+                    body
+                )
+            if errors:
+                self.send_json(409 if status < 500 else 502, {"message": ", ".join(errors)})
+            else:
+                self.send_json(200, {"ranked": key})
 
-        def rank(
+        def put_assignee(self, request):
+            # null unassigns; a missing "assignee" is an error rather than a silent unassignment.
+            key, login = request.get("issue"), request.get("assignee", "")
+            valid_login = login is None or (isinstance(login, str) and USER_LOGIN.match(login))
+            if not (isinstance(key, str) and ISSUE_KEY.match(key)) or not valid_login:
+                self.send_json(400, {"message": "one issue key, and an assignee login (null to unassign)"})
+                return
+            response = self.write_jira(
+                ASSIGNEE_PATH.format(key=key),
+                {"name": login}
+            )
+            if response is None:
+                return
+            status, body = response
+            errors = jira_errors(
+                status,
+                body
+            )
+            if errors:
+                self.send_json(409 if status < 500 else 502, {"message": ", ".join(errors)})
+                return
+            # The local copy is resynced right away and returned: the page shows the change without a
+            # second round trip, and the next background pass has nothing left to catch up on.
+            try:
+                entry = mirror.sync_issue(key)
+            except (OSError, http.client.HTTPException, JiraError, ValueError):
+                entry = None
+            self.send_json(200, {"assigned": key, "issue": entry})
+
+        def write_jira(
                 self,
-                key,
-                position,
-                neighbour
+                path,
+                payload
         ):
+            """PUT to Jira with a body built here, never one relayed from the page; None once a 502 is sent."""
             try:
                 status, body, headers = upstream.request(
                     "PUT",
-                    f"{settings['jira_host']}/{RANK_PATH}",
+                    f"{settings['jira_host']}/{path}",
                     {
                         "Authorization": "Bearer " + settings["jira_token"],
                         "Content-Type": "application/json",
                         "Accept": "application/json",
                     },
                     "write",
-                    json.dumps({"issues": [key], position: neighbour}).encode()
+                    json.dumps(payload).encode()
                 )
             except (OSError, http.client.HTTPException) as error:
                 self.send_json(502, {"message": f"Jira unreachable: {error}"})
-                return
+                return None
             if headers.get("Content-Encoding") == "gzip":
                 body = gzip.decompress(body)
-            # 204: ranked. 207: one response per issue, ours included, which may carry a refusal.
-            errors = []
-            if status == 207:
-                entries = json.loads(body or b"{}").get("entries", [])
-                errors = [message for entry in entries if entry.get("status", 200) >= 400 for message in entry.get("errors", ["refused"])]
-            elif status >= 300:
-                try:
-                    errors = json.loads(body).get("errorMessages") or [f"Jira {status}"]
-                except ValueError:
-                    errors = [f"Jira {status}"]
-            if errors:
-                self.send_json(409 if status < 500 else 502, {"message": ", ".join(errors)})
-            else:
-                self.send_json(200, {"ranked": key})
+            return status, body
 
         def same_origin(self):
             # A third-party page open in the browser can target localhost: without this check, it would reorder
@@ -252,3 +297,18 @@ def make_handler(
                 super().log_message(fmt, *args)
 
     return Handler
+
+
+def jira_errors(
+        status,
+        body
+):
+    """Messages of a refused Jira write: general ones, then those attached to a field."""
+    if status < 300:
+        return []
+    try:
+        payload = json.loads(body)
+        messages = payload.get("errorMessages", []) + list(payload.get("errors", {}).values())
+    except (ValueError, AttributeError, TypeError):
+        messages = []
+    return messages or [f"Jira {status}"]

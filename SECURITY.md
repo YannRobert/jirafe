@@ -15,7 +15,7 @@ reporter is credited if they wish.
 
 This includes any way for a third-party page, another user of the machine or a JIRA response to obtain
 the PAT, to read JIRA through the relay outside the allow-list, or to trigger a JIRA write other than the
-rank change the user asked for. The security model is described in the [README](README.md#security).
+rank or assignee change the user asked for. The security model is described in the [README](README.md#security).
 
 ## Supported versions
 

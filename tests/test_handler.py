@@ -29,7 +29,7 @@ class HandlerTest(unittest.TestCase):
         }
         mirror = IssueMirror(
             self.directory.name,
-            FakeJira([]),
+            FakeJira([{"key": "ABC-1", "fields": {"assignee": {"name": "alice"}}}]),
             42,
             BASE_DETAIL_FIELDS
         )
@@ -77,16 +77,39 @@ class HandlerTest(unittest.TestCase):
         finally:
             connection.close()
 
-    def rank(
+    def put(
             self,
+            path,
             payload,
             origin=None
     ):
         return self.call(
             "PUT",
-            "/rank",
+            path,
             json.dumps(payload).encode(),
             {"Origin": origin or f"http://127.0.0.1:{self.port}", "Content-Type": "application/json"}
+        )
+
+    def rank(
+            self,
+            payload,
+            origin=None
+    ):
+        return self.put(
+            "/rank",
+            payload,
+            origin
+        )
+
+    def assign(
+            self,
+            payload,
+            origin=None
+    ):
+        return self.put(
+            "/assignee",
+            payload,
+            origin
         )
 
     def test_page_has_injected_configuration_without_pat(self):
@@ -157,6 +180,70 @@ class HandlerTest(unittest.TestCase):
             json.loads(request["body"]),
             {"issues": ["ABC-1"], "rankAfterIssue": "ABC-2"}
         )
+
+    def test_rank_reports_jira_refusal(self):
+        self.upstream.response = (400, b'{"errorMessages": ["Issue not on the board"]}', {})
+        status, body = self.rank({"issue": "ABC-1", "before": "ABC-2"})
+        self.assertEqual(status, 409)
+        self.assertEqual(json.loads(body)["message"], "Issue not on the board")
+
+    def test_unknown_write_route(self):
+        self.assertEqual(self.put("/transition", {"issue": "ABC-1"})[0], 404)
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_assignee_refuses_other_origin(self):
+        status, _ = self.assign(
+            {"issue": "ABC-1", "assignee": "alice"},
+            origin="https://attacker.example"
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_assignee_refuses_invalid_body(self):
+        invalid = (
+            {"issue": "ABC-1"},
+            {"issue": "abc-1", "assignee": "alice"},
+            {"issue": "ABC-1/../2", "assignee": "alice"},
+            {"issue": "ABC-1", "assignee": ""},
+            {"issue": "ABC-1", "assignee": "alice\"bob"},
+            {"issue": "ABC-1", "assignee": "alice bob"},
+            {"issue": "ABC-1", "assignee": {"name": "alice"}},
+            {"issue": "ABC-1", "assignee": "x" * 256},
+            ["ABC-1", "alice"],
+        )
+        for payload in invalid:
+            with self.subTest(payload):
+                status, _ = self.assign(payload)
+                self.assertEqual(status, 400)
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_assignee_builds_body_sent_to_jira(self):
+        self.upstream.response = (204, b"", {})
+        for login in ("jean.dupont", "élodie.martin", None):
+            with self.subTest(login):
+                self.upstream.requests.clear()
+                status, body = self.assign({"issue": "ABC-1", "assignee": login, "extra": "ignored"})
+                self.assertEqual(status, 200)
+                answer = json.loads(body)
+                self.assertEqual(answer["assigned"], "ABC-1")
+                # The local copy, resynced after the write, comes back with the answer.
+                self.assertEqual(answer["issue"]["key"], "ABC-1")
+                request, = self.upstream.requests
+                self.assertEqual(request["method"], "PUT")
+                self.assertEqual(
+                    request["url"],
+                    f"{JIRA}/rest/api/2/issue/ABC-1/assignee"
+                )
+                self.assertEqual(
+                    json.loads(request["body"]),
+                    {"name": login}
+                )
+
+    def test_assignee_reports_jira_refusal(self):
+        self.upstream.response = (400, b'{"errorMessages": [], "errors": {"assignee": "User cannot be assigned"}}', {})
+        status, body = self.assign({"issue": "ABC-1", "assignee": "alice"})
+        self.assertEqual(status, 409)
+        self.assertEqual(json.loads(body)["message"], "User cannot be assigned")
 
     def test_issue(self):
         self.assertEqual(self.call("GET", "/issue/not-a-key")[0], 400)
