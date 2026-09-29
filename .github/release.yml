@@ -1,0 +1,10 @@
+# Categories of the release notes GitHub generates from merged pull requests (Releases > Generate
+# release notes): this is what replaces a hand-written CHANGELOG.md.
+changelog:
+  categories:
+    - title: New features
+      labels: [enhancement]
+    - title: Bug fixes
+      labels: [bug]
+    - title: Other changes
+      labels: ["*"]

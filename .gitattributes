@@ -1,0 +1,5 @@
+* text=auto
+# cmd.exe misreads a .cmd file with LF line endings (labels, blocks): CRLF on every machine.
+*.cmd text eol=crlf
+# A shell script with CRLF line endings fails on Linux / macOS ("bad interpreter"): LF on every machine.
+*.sh text eol=lf

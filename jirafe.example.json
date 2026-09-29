@@ -1,0 +1,8 @@
+{
+  "jiraHost": "https://jira.example.com",
+  "boardId": 42,
+  "fields": {
+    "storyPoints": "customfield_12345",
+    "sprints": "customfield_12346"
+  }
+}

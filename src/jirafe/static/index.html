@@ -1,0 +1,2388 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<!-- Tab icon: the header's giraffe logo, as inline SVG (no route to serve). -->
+<link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Cdefs%3E%3CclipPath id='neck'%3E%3Cpath d='M13 64 C15 50 20 40 27 31 L39 35 C35 43 33 53 33 64 Z'/%3E%3C/clipPath%3E%3CclipPath id='head'%3E%3Cellipse cx='37' cy='25' rx='14' ry='9.5' transform='rotate(22 37 25)'/%3E%3C/clipPath%3E%3C/defs%3E%3Cg stroke='%233b2412' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cpath d='M30 18 L27 7 M36 16 L36 5' fill='none' stroke-width='5.4'/%3E%3Cpath d='M30 18 L27 7 M36 16 L36 5' fill='none' stroke='%23f2b84b' stroke-width='2'/%3E%3Ccircle cx='27' cy='6.5' r='3.2' fill='%238a4f1c'/%3E%3Ccircle cx='36' cy='4.8' r='3.2' fill='%238a4f1c'/%3E%3Cpath d='M27 21 C20 17 16 19 14 21 C18 24 23 25 28 24 Z' fill='%23f2b84b'/%3E%3Cpath d='M25 21.6 C21 19.8 19 20.2 17.6 21.2 C20 22.6 22.6 23 25.4 22.8 Z' fill='%23e9967a' stroke='none'/%3E%3Cpath d='M13 64 C15 50 20 40 27 31 L39 35 C35 43 33 53 33 64 Z' fill='%23f2b84b'/%3E%3C/g%3E%3Cg clip-path='url(%23neck)' fill='%23b8691f'%3E%3Cpath d='M17 50 q4 -4 8 -1 q1 5 -4 6 q-5 0 -4 -5z'/%3E%3Cpath d='M26 41 q4 -3 7 0 q0 4 -4 5 q-4 -1 -3 -5z'/%3E%3Cpath d='M27 56 q4 -2 7 1 v6 h-8 q-2 -4 1 -7z'/%3E%3Cpath d='M12 60 q3 -3 5 0 q0 3 -3 4 h-3z'/%3E%3C/g%3E%3Cpath d='M14 58 C15 48 19 40 25 33' fill='none' stroke='%238a4f1c' stroke-width='3' stroke-linecap='round' stroke-dasharray='3 2.2'/%3E%3Cg stroke='%233b2412' stroke-width='2.4' stroke-linejoin='round'%3E%3Cellipse cx='37' cy='25' rx='14' ry='9.5' transform='rotate(22 37 25)' fill='%23f2b84b'/%3E%3C/g%3E%3Cg clip-path='url(%23head)' fill='%23b8691f'%3E%3Cpath d='M28 16 q4 -3 7 0 q0 4 -4 4 q-4 0 -3 -4z'/%3E%3Cpath d='M26 26 q3 -2 5 1 q-1 4 -4 3 q-3 -1 -1 -4z'/%3E%3C/g%3E%3Cellipse cx='40.5' cy='29' rx='2.4' ry='1.5' fill='%23e9967a' opacity='0.8' transform='rotate(22 40.5 29)'/%3E%3Cg stroke='%233b2412' stroke-width='2.4' stroke-linejoin='round' stroke-linecap='round'%3E%3Cellipse cx='48.5' cy='31.5' rx='8' ry='6.5' transform='rotate(22 48.5 31.5)' fill='%23f7dca6'/%3E%3Cpath d='M44 36.5 q3.5 2.2 7 1.2' fill='none' stroke-width='1.8'/%3E%3C/g%3E%3Cellipse cx='52' cy='29.2' rx='1.3' ry='1' fill='%233b2412' transform='rotate(22 52 29.2)'/%3E%3Ccircle cx='38' cy='22' r='3.1' fill='%233b2412'/%3E%3Ccircle cx='39.1' cy='20.9' r='1.1' fill='%23fff'/%3E%3Cpath d='M34.5 18.5 q2.5 -2 5.5 -0.6' fill='none' stroke='%233b2412' stroke-width='1.6' stroke-linecap='round'/%3E%3C/svg%3E">
+<title>Jirafe</title>
+<!-- Preferences applied before the first render: no light flash, no columns disappearing afterwards. -->
+<script>
+try {
+  if (localStorage.getItem("sprint-board.theme") === "light") document.documentElement.dataset.theme = "light";
+} catch (ignored) { /* storage unavailable: dark theme */ }
+</script>
+<style>
+  /* Jirafe palette (ochre, brown, cream): deliberately far from Jira's blues, so the two tabs are never
+     mistaken for each other. Dark by default; light is chosen with the header's ☀ icon (remembered by the
+     browser). */
+  /* color-scheme: native drop-down lists (sprint, labels) follow the theme instead of mixing the system's
+     light options with the page's dark ones. */
+  :root {
+    color-scheme: dark;
+    --bg: #24201b;
+    --column: #2d2822;
+    --card: #37312a;
+    --card-hover: #413a32;
+    --border: #4a4239;
+    --text: #ebe2d6;
+    --muted: #b5a797;
+    --faint: #857868;
+    --link: #f2b65e;
+    --accent: #e8a33d;
+    --accent-fg: #171411;
+    --chip: #554a3f;
+    --selected: #463723;
+    --red: #f87462; --orange: #f5a524; --green: #4bce97;
+    --status-new: #554a3f; --status-new-fg: #ebe2d6;
+    --status-progress: #463723; --status-progress-fg: #f2b65e;
+    --status-done: #29402f; --status-done-fg: #8fd6a8;
+    --shadow: 0 1px 2px rgba(0, 0, 0, .35);
+    --panel-shadow: -8px 0 32px -8px rgba(0, 0, 0, .6);
+    --panel-shadow-left: 8px 0 32px -8px rgba(0, 0, 0, .6);
+  }
+  :root[data-theme="light"] {
+    color-scheme: light;
+    --bg: #fbf8f3;
+    --column: #f1eadf;
+    --card: #ffffff;
+    --card-hover: #fdf9f3;
+    --border: #e2d7c7;
+    --text: #2b2118;
+    --muted: #6f5f4e;
+    --faint: #9a8a77;
+    --link: #a35f0a;
+    --accent: #c9791b;
+    --accent-fg: #ffffff;
+    --chip: #e6dccd;
+    --selected: #fbeacc;
+    --red: #d1401f; --orange: #d9820f; --green: #1f8a55;
+    --status-new: #e6dccd; --status-new-fg: #4a3b2c;
+    --status-progress: #fbeacc; --status-progress-fg: #8a4d00;
+    --status-done: #dcf3e3; --status-done-fg: #1d6b3a;
+    --shadow: 0 1px 2px rgba(60, 40, 20, .18);
+    --panel-shadow: -8px 0 32px -8px rgba(60, 40, 20, .3);
+    --panel-shadow-left: 8px 0 32px -8px rgba(60, 40, 20, .3);
+  }
+  * { box-sizing: border-box; }
+  /* The base size follows the screen width: the board stays readable from a laptop to a wall screen. */
+  html { font-size: clamp(14px, 0.6vw + 5px, 24px); }
+  /* The page does not scroll: only the board does, so the column headers stay stuck at the top. */
+  html, body { height: 100%; }
+  body {
+    margin: 0; display: flex; flex-direction: column;
+    background: var(--bg); color: var(--text);
+    font: 0.9rem/1.4 system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+    -webkit-font-smoothing: antialiased;
+  }
+  a { color: var(--link); text-decoration: none; }
+  a:hover { text-decoration: underline; }
+  :focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  button { font: inherit; color: inherit; }
+
+  header { flex: none; border-top: 4px solid var(--accent); padding: 0.9rem 1.2rem 0.4rem; display: flex; flex-wrap: wrap; align-items: flex-end; gap: 0.6rem 1.2rem; }
+  header .brand {
+    display: flex; align-items: center; gap: 0.55rem; margin-right: 0.9rem; padding-right: 0.9rem;
+    border-right: 1px solid var(--border); font-weight: 800; font-size: 1.7rem; letter-spacing: -0.01em;
+  }
+  header .brand .logo { width: 3rem; height: 3rem; flex: none; }
+  header .brand .j { color: var(--accent); }
+  header .brand .name { display: flex; flex-direction: column; line-height: 1.05; }
+  header .brand .tagline { color: var(--muted); font-size: 0.85rem; font-weight: 500; font-style: italic; letter-spacing: 0; }
+  header .titles { display: flex; flex-direction: column; min-width: 0; }
+  header .crumb { color: var(--muted); font-size: 0.85rem; }
+  header h1 { margin: 0; display: flex; align-items: baseline; gap: 0.8rem; font-size: 1.5rem; font-weight: 500; }
+  header select {
+    font: inherit; font-size: 0.9rem; color: var(--link); background: transparent; border: 0; cursor: pointer; padding: 0.1rem 0;
+  }
+  header select option, .filters .more-labels option { color: var(--text); background: var(--column); }
+  header select option:checked, .filters .more-labels option:checked { color: var(--accent-fg); background: var(--accent); }
+  header select option:disabled, .filters .more-labels option:disabled,
+  .filters .more-labels option[value=""] { color: var(--faint); background: var(--column); font-style: italic; }
+  header .spacer { flex: 1; }
+  header .right { display: flex; align-items: center; gap: 0.9rem; color: var(--muted); font-size: 0.85rem; }
+  header .remaining { font-size: 0.85rem; font-weight: 400; color: var(--muted); white-space: nowrap; }
+  header .remaining.over { color: var(--red); font-weight: 600; }
+  header .status { text-align: right; line-height: 1.3; }
+  /* Load put on Jira, like a load average: requests sent by the server over 1, 5 and 15 minutes. */
+  .jira-load { position: relative; }
+  .load-btn {
+    display: inline-flex; flex-direction: column; align-items: flex-end; gap: 0.1rem; cursor: pointer;
+    border: 1px solid var(--border); border-radius: 0.5rem; background: var(--column); color: var(--muted);
+    padding: 0.2rem 0.55rem; font: inherit; font-size: 0.72rem; line-height: 1.15;
+  }
+  .load-btn:hover, .load-btn[aria-expanded="true"] { border-color: var(--accent); }
+  .load-btn .values { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; font-size: 0.85rem; color: var(--text); }
+  .load-btn .values b { color: var(--accent); font-weight: 600; }
+  .load-btn .values .sep { color: var(--faint); }
+  .load-panel {
+    position: absolute; top: calc(100% + 0.4rem); right: 0; z-index: 30; min-width: 19rem;
+    padding: 0.7rem 0.8rem; border: 1px solid var(--border); border-radius: 0.6rem;
+    background: var(--column); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  }
+  .load-panel[hidden] { display: none; }
+  .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
+  .load-panel table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
+  .load-panel th, .load-panel td { padding: 0.2rem 0.4rem; text-align: right; }
+  .load-panel th:first-child, .load-panel td:first-child { text-align: left; }
+  .load-panel thead th { color: var(--muted); font-weight: 500; border-bottom: 1px solid var(--border); }
+  .load-panel td { font-family: ui-monospace, SFMono-Regular, Consolas, monospace; }
+  .load-panel td:first-child { font-family: inherit; }
+  .load-panel td .hint { display: block; color: var(--faint); font-size: 0.7rem; }
+  .load-panel tfoot td { border-top: 1px solid var(--border); font-weight: 600; }
+  .load-panel p { margin: 0.6rem 0 0; color: var(--muted); font-size: 0.75rem; line-height: 1.35; }
+  header .status > span { display: block; }
+  header .status .progress { color: var(--accent); }
+  header .status .failed { color: var(--red); }
+  .btn {
+    border: 0; border-radius: 3px; padding: 0.35rem 0.7rem; cursor: pointer;
+    background: var(--chip); color: var(--text); white-space: nowrap;
+  }
+  .btn:hover { filter: brightness(1.1); text-decoration: none; }
+  .btn:disabled { opacity: 0.6; cursor: progress; }
+  a.btn { display: inline-block; color: var(--text); }
+  /* Refresh controls: auto-refresh checkbox, refresh button, and the freshness gauge below them. */
+  .refresh-controls {
+    position: relative; display: inline-flex; align-items: center; gap: 0.9rem;
+    padding: 0.3rem 0.3rem 0.3rem 0.8rem; border: 1px solid var(--border); border-radius: 0.7rem; background: var(--column);
+  }
+  .refresh-controls label.auto { display: inline-flex; gap: 0.4em; align-items: center; color: var(--text); cursor: pointer; }
+  .refresh-controls label.auto input { accent-color: var(--accent); width: 1.2rem; height: 1.2rem; margin: 0; cursor: pointer; }
+  .btn.primary { background: var(--accent); color: var(--accent-fg); font-weight: 600; border-radius: 0.5rem; }
+  /* Data freshness: 5 segments, one per minute, fading out until the next auto-refresh; green up to 2 min,
+     red at 4 min. Pure CSS animation, restarted at each refresh: no computation while waiting. */
+  .freshness { position: absolute; left: 0.8rem; right: 0.8rem; bottom: 3px; height: 4px; display: flex; gap: 3px; pointer-events: none; }
+  .freshness[hidden] { display: none; }
+  .freshness i {
+    flex: 1; border-radius: 999px; background: var(--green);
+    animation: freshness-color var(--cycle) linear var(--delay) forwards, freshness-off var(--off) steps(1, end) var(--delay) forwards;
+  }
+  @keyframes freshness-color {
+    0%, 40% { background: var(--green); }
+    60% { background: var(--orange); }
+    80%, 100% { background: var(--red); }
+  }
+  @keyframes freshness-off { to { opacity: 0.15; } }
+
+  .filters { flex: none; display: flex; flex-wrap: wrap; align-items: center; gap: 0.2rem 0.3rem; padding: 0.3rem 1.2rem 0.7rem; font-size: 0.85rem; }
+  .filters .label { color: var(--muted); font-weight: 600; font-size: 0.75rem; letter-spacing: 0.02em; margin-right: 0.4rem; }
+  .filters button.qf {
+    border: 0; background: transparent; color: var(--link); padding: 0.2rem 0.45rem; border-radius: 3px; cursor: pointer;
+  }
+  .filters button.qf:hover { background: var(--chip); }
+  .filters button.qf[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+  /* The logged-in user, among the quick filters. */
+  .filters button.qf.me { position: relative; isolation: isolate; color: var(--accent); font-weight: 700; }
+  .filters button.qf.me[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); }
+  /* Giraffe horns (ossicones, as on the logo) planted on the last letter of the first name, to keep the
+     initial readable: the top of a lowercase letter is ~0.5em below the top of the box; the horns (0.7em)
+     sink their base into it. */
+  .qf.me .horned { position: relative; display: inline-block; }
+  .qf.me .horned::before {
+    content: ""; position: absolute; left: 50%; top: -0.14em; width: 0.8em; height: 0.7em;
+    transform: translateX(-50%) rotate(-6deg); pointer-events: none;
+    background: center / contain no-repeat url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 20 17'%3E%3Cg stroke-linecap='round' fill='none'%3E%3Cpath d='M7.5 16 L5.6 5.5 M12.5 16 L14.4 5.5' stroke='%233b2412' stroke-width='4.6'/%3E%3Cpath d='M7.5 16 L5.6 5.5 M12.5 16 L14.4 5.5' stroke='%23f2b84b' stroke-width='2.2'/%3E%3C/g%3E%3Cg fill='%238a4f1c' stroke='%233b2412' stroke-width='1.2'%3E%3Ccircle cx='5.4' cy='4.2' r='3'/%3E%3Ccircle cx='14.6' cy='4.2' r='3'/%3E%3C/g%3E%3C/svg%3E");
+    filter: drop-shadow(0 1px 0.5px rgb(0 0 0 / 35%));
+  }
+  /* Search and count, right-aligned: the group takes the rest of the line; when space runs out (zoom,
+     narrow screen), the count wraps under the search, still on the right, rather than alone on the left. */
+  .filters .search {
+    flex: 1 0 16rem; display: flex; flex-wrap: wrap; justify-content: flex-end; align-items: center; gap: 0.1rem 0.6rem;
+  }
+  .filters input {
+    width: 16rem; max-width: 100%; font: inherit; color: var(--text);
+    background: var(--column); border: 1px solid var(--border); border-radius: 3px; padding: 0.3rem 0.6rem;
+  }
+  /* Assignee filters on one side, the others on the other: they are not mixed up. */
+  .filters .qf-sep { width: 1px; align-self: stretch; margin: 0.15rem 0.6rem; background: var(--border); }
+  /* Labels move away from the quick filters as far as the width allows: ~3rem on a large screen, the usual
+     gap on a narrow one. */
+  .filters .qf-sep.labels-sep { margin-inline: clamp(0.6rem, 2.5vw, 3rem); }
+  .filters .count { color: var(--muted); white-space: nowrap; }
+  /* Reduced width (zoom, small screen): filters tighten up before wrapping. */
+  @media (max-width: 110rem) {
+    .filters button.qf { padding-inline: 0.3rem; }
+    .filters .qf-sep { margin-inline: 0.35rem; }
+    .filters .qf-sep.labels-sep { margin-inline: clamp(0.35rem, 1.2vw, 1.5rem); }
+    .filters .label { margin-right: 0.15rem; }
+  }
+  .filters button.qf .n { margin-left: 0.3rem; font-size: 0.7rem; opacity: 0.7; }
+  .filters .more-labels {
+    font: inherit; font-size: 0.8rem; color: var(--link); background: transparent; border: 1px dashed var(--border);
+    border-radius: 3px; padding: 0.15rem 0.3rem; cursor: pointer; max-width: 12rem;
+  }
+  header .view { display: flex; align-items: center; gap: 1.2rem; align-self: center; }
+  header .divider { width: 1px; align-self: stretch; background: var(--border); }
+  header .right { align-self: center; }
+  .icon-btn {
+    border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit;
+    padding: 0.2rem 0.35rem; border-radius: 4px;
+  }
+  .icon-btn:hover { background: var(--chip); color: var(--text); }
+  /* Views: a segmented control, the active view reads at a glance. */
+  .views { display: inline-flex; padding: 2px; border-radius: 6px; background: var(--column); border: 1px solid var(--border); }
+  .views button {
+    border: 0; background: none; color: var(--muted); cursor: pointer; font: inherit; font-size: 0.8rem;
+    padding: 0.2rem 0.65rem; border-radius: 4px; display: inline-flex; align-items: baseline; gap: 0.35rem;
+  }
+  .views button:hover { color: var(--text); }
+  .views button[aria-pressed="true"] { background: var(--accent); color: var(--accent-fg); font-weight: 600; }
+  .views .n { font-size: 0.7rem; opacity: 0.8; }
+  .views[hidden] { display: none; }
+  .icon-btn { font-size: 1.15rem; line-height: 1; padding: 0.3rem 0.5rem; }
+  /* Clear all filters (quick, labels, search); disabled when there is nothing to clear. */
+  .icon-btn.clear { display: inline-flex; padding: 0.3rem 0.4rem; }
+  .icon-btn.clear svg {
+    width: 1.25rem; height: 1.25rem; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .icon-btn.clear:not(:disabled) { color: var(--accent); }
+  .icon-btn.clear:disabled { opacity: 0.35; cursor: default; background: none; }
+
+  main { flex: 1; min-height: 0; overflow: auto; padding: 0 1.2rem 1rem; }
+  .board { display: grid; grid-template-columns: repeat(var(--cols, 10), minmax(12.5rem, 1fr)); gap: 0.5rem; min-height: 100%; }
+  .column { background: var(--column); border-radius: 8px; display: flex; flex-direction: column; min-width: 0; }
+  .column h2 {
+    position: sticky; top: 0; z-index: 1; margin: 0; padding: 0.7rem 0.6rem 0.5rem;
+    background: var(--column); border-radius: 8px 8px 0 0;
+    font-size: 0.75rem; font-weight: 600; letter-spacing: 0.02em; text-transform: uppercase; color: var(--muted);
+    display: flex; justify-content: space-between; gap: 0.4rem;
+  }
+  .column h2 .n { font-weight: 400; white-space: nowrap; }
+  /* A wide column (a view showing only part of the board: 5 columns instead of 10) lays its cards side by
+     side: the screen is used in width instead of forcing vertical scrolling. */
+  .cards {
+    display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 15rem), 1fr));
+    align-content: start; gap: 0.4rem; padding: 0 0.4rem 0.5rem;
+  }
+  .cards .empty-col { grid-column: 1 / -1; }
+
+  .card {
+    display: block; color: var(--text); background: var(--card); border-radius: 6px; box-shadow: var(--shadow);
+    padding: 0.55rem 0.6rem 0.5rem; cursor: pointer;
+    /* Deferred rendering of off-screen cards: only visible cards are laid out and painted. */
+    content-visibility: auto; contain-intrinsic-size: auto 7rem;
+  }
+  .card:hover { background: var(--card-hover); text-decoration: none; }
+  /* Drag and drop: the grabbed card follows the pointer, lifted; its place in the column becomes a dashed
+     slot that moves, and the other cards slide to make room for it. */
+  body.card-dragging, body.card-dragging * { cursor: grabbing !important; user-select: none; }
+  .card.placeholder {
+    background: color-mix(in srgb, var(--accent) 10%, transparent); box-shadow: none;
+    outline: 2px dashed color-mix(in srgb, var(--accent) 65%, transparent); outline-offset: -2px;
+  }
+  .card.placeholder > * { visibility: hidden; }
+  .drag-ghost {
+    position: fixed; z-index: 1000; margin: 0; pointer-events: none; will-change: transform;
+    box-shadow: 0 14px 30px rgba(0, 0, 0, .45), 0 0 0 2px var(--accent);
+  }
+  .drag-ghost[data-hint]::after {
+    content: attr(data-hint); position: absolute; left: 50%; top: 100%; transform: translate(-50%, 0.4rem);
+    white-space: nowrap; font-size: 0.75rem; padding: 0.2rem 0.5rem; border-radius: 3px;
+    background: var(--red); color: #fff;
+  }
+  .column.drag-origin { background: color-mix(in srgb, var(--accent) 7%, var(--column)); }
+  .column.drag-refused { outline: 2px dashed var(--red); outline-offset: -2px; }
+  .card.selected { background: var(--selected); outline: 2px solid var(--accent); outline-offset: -2px; }
+  .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
+  .card .key { color: var(--muted); font-size: 0.8rem; }
+  .card .who { display: flex; align-items: center; gap: 0.5rem; min-width: 0; }
+  .card .first-name { color: var(--muted); font-size: 0.8rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .card.done .key { text-decoration: line-through; }
+  .card .summary {
+    margin: 0.15rem 0 0.35rem; overflow-wrap: anywhere;
+    display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden;
+  }
+  .epic {
+    display: inline-block; max-width: 100%; margin-bottom: 0.35rem; padding: 0 0.35rem; border-radius: 3px;
+    font-size: 0.8rem; color: #172b4d; background: var(--epic); white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+  }
+  .card .foot { display: flex; align-items: center; gap: 0.3rem; }
+  .icon { width: 1rem; height: 1rem; flex: none; }
+  .sp {
+    min-width: 1.4rem; padding: 0 0.4rem; border-radius: 1rem; background: var(--chip); color: var(--text);
+    font-size: 0.75rem; text-align: center;
+  }
+  .avatar {
+    position: relative; flex: none; width: 1.7rem; height: 1.7rem; border-radius: 50%; overflow: hidden;
+    display: grid; place-items: center; font-size: 0.65rem; font-weight: 700; color: #fff;
+    background: var(--avatar-bg, #5b6b7c); letter-spacing: 0.02em;
+    /* Outline: a thin gap in the card's colour, then a ring, detach the photo from the background. */
+    box-shadow: 0 0 0 2px var(--card), 0 0 0 3.5px var(--faint);
+  }
+  .avatar img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
+  /* Unassigned: silhouette and "?" in ochre on a dashed circle. Stands out at a glance among solid avatars,
+     without the weight of an alert colour. */
+  .avatar.none {
+    background: transparent; border: 1.5px dashed var(--accent); color: var(--accent); overflow: visible; box-shadow: none;
+  }
+  .avatar.none svg { width: 72%; height: 72%; }
+  .avatar.none .q {
+    position: absolute; right: -0.3rem; bottom: -0.25rem; width: 0.85rem; height: 0.85rem; border-radius: 50%;
+    display: grid; place-items: center; font-size: 0.6rem; font-weight: 800; line-height: 1;
+    background: var(--accent); color: var(--accent-fg); box-shadow: 0 0 0 2px var(--card);
+  }
+  .empty-col { color: var(--faint); font-size: 0.8rem; text-align: center; padding: 0.8rem 0; }
+  .skeleton { color: var(--muted); padding: 2rem; text-align: center; }
+  .error-banner { margin: 0 1.2rem 0.6rem; padding: 0.5rem 0.8rem; border-radius: 3px; background: #ffebe6; color: #bf2600; }
+
+  /* ---------- Detail panel ---------- */
+  aside {
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 10; width: min(44rem, 94vw);
+    background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--panel-shadow);
+    display: flex; flex-direction: column;
+  }
+  /* Card in the right half of the screen: the panel opens on the left, so as not to cover it. */
+  aside.left { right: auto; left: 0; border-left: 0; border-right: 1px solid var(--border); box-shadow: var(--panel-shadow-left); }
+  aside[hidden] { display: none; }
+  /* Detail at the bottom: the panel takes its place under the board instead of covering it; the board
+     shrinks and scrolls above, the selected card stays visible. Height adjustable with the grip. */
+  aside.bottom {
+    position: relative; inset: auto; z-index: 1; flex: none; width: auto; height: var(--panel-height, 42vh);
+    border: 0; border-top: 1px solid var(--border); box-shadow: 0 -10px 28px -14px rgba(0, 0, 0, 0.6);
+  }
+  aside .grip { display: none; }
+  aside.bottom .grip {
+    display: block; position: absolute; left: 0; right: 0; top: -4px; height: 8px; z-index: 2; cursor: row-resize;
+  }
+  aside.bottom .grip::after {
+    content: ""; position: absolute; left: 50%; top: 2px; width: 3rem; height: 4px; margin-left: -1.5rem;
+    border-radius: 2px; background: var(--border);
+  }
+  aside.bottom .grip:hover::after, body.resizing aside .grip::after { background: var(--accent); }
+  body.resizing { cursor: row-resize; user-select: none; }
+  /* At the bottom, full width: three columns that each scroll on their own — the fields, the description
+     (and its links), the comments — in lines of readable length rather than spread across the screen.
+     Description and comments are read side by side. */
+  @media (min-width: 70rem) {
+    aside.bottom .content {
+      display: grid; grid-template-columns: minmax(22rem, 28rem) minmax(0, 1.25fr) minmax(0, 1fr);
+      padding: 0; overflow: hidden;
+    }
+    aside.bottom .content > * { min-height: 0; overflow: auto; padding: 1rem 1.4rem 4.5rem; }
+    aside.bottom .content > * + * { border-left: 1px solid var(--border); }
+    aside.bottom .content > * > h4:first-child { margin-top: 0; }
+    aside.bottom h3 { font-size: 1.15rem; margin-bottom: 0.6rem; }
+  }
+  aside .bar { flex: none; display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); }
+  aside .bar .key { font-weight: 600; }
+  aside .bar .nav { color: var(--faint); font-size: 0.75rem; }
+  aside .bar .spacer { flex: 1; }
+  aside .bar .sync { font-size: 0.8rem; }
+  .sync-failed { color: var(--red); }
+  /* Forced resync: the "synced … ago" mention itself, with no extra button. */
+  aside .bar .resync { border: 0; background: none; padding: 0; font: inherit; cursor: pointer; }
+  aside .bar .resync:hover { text-decoration: underline dotted; color: var(--text); }
+  aside .content { flex: 1; overflow: auto; padding: 1rem 1.2rem 4.5rem; }
+  /* Floating table of contents at the bottom right: a click brings the section to the top of the column
+     holding it (at the bottom: description in the middle, comments and history on the right). */
+  aside .jump { position: absolute; right: 1.2rem; bottom: 1.2rem; z-index: 3; display: flex; flex-direction: column; align-items: flex-end; gap: 0.5rem; }
+  aside .jump .sections {
+    display: flex; flex-direction: column; border: 1px solid var(--border); border-radius: 0.7rem; overflow: hidden;
+    background: color-mix(in srgb, var(--card) 82%, transparent); backdrop-filter: blur(6px);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3); opacity: 0.8; transition: opacity 0.15s;
+  }
+  aside .jump .sections:hover, aside .jump .sections:focus-within { opacity: 1; }
+  aside .jump .sections:empty { display: none; }
+  aside .jump .sections button {
+    display: flex; justify-content: space-between; gap: 0.8rem; border: 0; background: none; padding: 0.4rem 0.85rem;
+    font-size: 0.8rem; color: var(--muted); text-align: left; cursor: pointer;
+  }
+  aside .jump .sections button + button { border-top: 1px solid var(--border); }
+  aside .jump .sections button:hover { background: var(--accent); color: var(--accent-fg); }
+  aside .jump .sections .count { color: var(--faint); font-size: 0.72rem; }
+  aside .jump .sections button:hover .count { color: inherit; }
+  /* Back to the top of the detail: only appears after scrolling down about one screen. */
+  aside .to-top {
+    flex: none; order: 1; width: 2.4rem; height: 2.4rem; border-radius: 50%;
+    border: 1px solid var(--border); background: var(--card); color: var(--accent); box-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    font-size: 1.1rem; cursor: pointer; opacity: 0; pointer-events: none; transform: translateY(0.4rem);
+    transition: opacity 0.15s, transform 0.15s;
+  }
+  aside .to-top.shown { opacity: 1; pointer-events: auto; transform: none; }
+  aside .to-top:hover { background: var(--accent); color: var(--accent-fg); }
+  /* Preview of an attached image when hovering its name: no click, no new tab. */
+  aside a.previewable::after { content: " 🖼"; font-size: 0.8em; opacity: 0.7; }
+  .preview {
+    position: fixed; z-index: 50; pointer-events: none; padding: 0.35rem; border-radius: 6px;
+    background: var(--card); border: 1px solid var(--border); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
+  }
+  .preview[hidden] { display: none; }
+  .preview img { display: block; object-fit: contain; }
+  .preview .loading { display: none; padding: 1rem 1.4rem; color: var(--muted); font-size: 0.85rem; }
+  .preview.loading img { display: none; }
+  .preview.loading .loading { display: block; }
+  aside h3 { margin: 0 0 0.8rem; font-size: 1.3rem; font-weight: 500; }
+  aside .facts { display: grid; grid-template-columns: max-content 1fr; gap: 0.45rem 1.2rem; align-items: center; margin: 0; padding: 0.6rem 0; font-size: 0.85rem; }
+  aside .facts + .facts { border-top: 1px solid var(--border); }
+  /* Smaller avatars in the fields: a "person" line keeps the height of the others. */
+  aside .facts .avatar { width: 1.3rem; height: 1.3rem; font-size: 0.5rem; box-shadow: 0 0 0 1.5px var(--bg), 0 0 0 2.5px var(--faint); }
+  aside .facts:first-of-type { padding-top: 0; }
+  aside .links { list-style: none; margin: 0; padding: 0; font-size: 0.85rem; }
+  aside .links li { display: flex; align-items: center; gap: 0.45rem; padding: 0.35rem 0; border-top: 1px solid var(--border); min-width: 0; }
+  aside .links li:first-child { border-top: 0; }
+  aside .links .relation { color: var(--muted); flex: none; min-width: 8rem; }
+  aside .links a { flex: none; }
+  aside .links .summary { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  aside .links .status-pill { flex: none; }
+  aside .facts dt { color: var(--muted); }
+  aside .facts dd { margin: 0; display: flex; align-items: center; gap: 0.35rem; flex-wrap: wrap; }
+  .status-pill { padding: 0.05rem 0.4rem; border-radius: 3px; font-size: 0.75rem; font-weight: 700; text-transform: uppercase; }
+  .status-pill.new { background: var(--status-new); color: var(--status-new-fg); }
+  .status-pill.indeterminate { background: var(--status-progress); color: var(--status-progress-fg); }
+  .status-pill.done { background: var(--status-done); color: var(--status-done-fg); }
+  .tag { padding: 0 0.35rem; border-radius: 3px; background: var(--chip); font-size: 0.8rem; }
+  aside h4 { margin: 1.4rem 0 0.5rem; font-size: 0.8rem; text-transform: uppercase; color: var(--muted); letter-spacing: 0.02em; }
+  .rich { overflow-wrap: anywhere; }
+  .rich img { max-width: 100%; height: auto; }
+  .rich table { border-collapse: collapse; max-width: 100%; display: block; overflow-x: auto; }
+  .rich th, .rich td { border: 1px solid var(--border); padding: 0.2rem 0.4rem; }
+  .rich pre, .rich code { white-space: pre-wrap; background: var(--column); border-radius: 3px; }
+  .rich pre { padding: 0.5rem; }
+  .rich p { margin: 0 0 0.6rem; }
+  .comment { border-top: 1px solid var(--border); padding: 0.6rem 0; }
+  .comment .who { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.3rem; }
+  .comment .who .when { color: var(--muted); }
+  .muted { color: var(--muted); }
+  /* History: who changed what, newest first. */
+  .history { list-style: none; margin: 0; padding: 0; }
+  .history > li { border-top: 1px solid var(--border); padding: 0.5rem 0; }
+  .history > li.bot { opacity: 0.6; }
+  .history .who { display: flex; align-items: center; gap: 0.5rem; font-size: 0.85rem; margin-bottom: 0.25rem; }
+  .history .who .when { color: var(--muted); }
+  .history ul { list-style: none; margin: 0; padding: 0 0 0 2rem; font-size: 0.85rem; line-height: 1.45; }
+  .history .field { color: var(--muted); font-weight: 600; }
+  .history .field::after { content: ":"; }
+  .history del { color: var(--faint); }
+  .history .new { color: var(--text); }
+  .history details { display: inline; }
+  .history summary { display: inline; cursor: pointer; color: var(--link); }
+  .history details[open] { display: block; }
+  .history details .old, .history details .new {
+    white-space: pre-wrap; margin-top: 0.3rem; padding: 0.3rem 0.5rem; border-radius: 3px; background: var(--column);
+  }
+  .history details .old { text-decoration: line-through; color: var(--faint); }
+</style>
+</head>
+<body>
+<header>
+  <span class="brand" title="Jirafe: the Jira board without breaking your neck — no waiting, no F5, no browser on its knees"><svg class="logo" aria-hidden="true" viewBox="0 0 64 64"><defs><clipPath id="jirafe-neck"><path d="M13 64 C15 50 20 40 27 31 L39 35 C35 43 33 53 33 64 Z"/></clipPath><clipPath id="jirafe-head"><ellipse cx="37" cy="25" rx="14" ry="9.5" transform="rotate(22 37 25)"/></clipPath></defs><g stroke="#3b2412" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><path d="M30 18 L27 7 M36 16 L36 5" fill="none" stroke-width="5.4"/><path d="M30 18 L27 7 M36 16 L36 5" fill="none" stroke="#f2b84b" stroke-width="2"/><circle cx="27" cy="6.5" r="3.2" fill="#8a4f1c"/><circle cx="36" cy="4.8" r="3.2" fill="#8a4f1c"/><path d="M27 21 C20 17 16 19 14 21 C18 24 23 25 28 24 Z" fill="#f2b84b"/><path d="M25 21.6 C21 19.8 19 20.2 17.6 21.2 C20 22.6 22.6 23 25.4 22.8 Z" fill="#e9967a" stroke="none"/><path d="M13 64 C15 50 20 40 27 31 L39 35 C35 43 33 53 33 64 Z" fill="#f2b84b"/></g><g clip-path="url(#jirafe-neck)" fill="#b8691f"><path d="M17 50 q4 -4 8 -1 q1 5 -4 6 q-5 0 -4 -5z"/><path d="M26 41 q4 -3 7 0 q0 4 -4 5 q-4 -1 -3 -5z"/><path d="M27 56 q4 -2 7 1 v6 h-8 q-2 -4 1 -7z"/><path d="M12 60 q3 -3 5 0 q0 3 -3 4 h-3z"/></g><path d="M14 58 C15 48 19 40 25 33" fill="none" stroke="#8a4f1c" stroke-width="3" stroke-linecap="round" stroke-dasharray="3 2.2"/><g stroke="#3b2412" stroke-width="2.4" stroke-linejoin="round"><ellipse cx="37" cy="25" rx="14" ry="9.5" transform="rotate(22 37 25)" fill="#f2b84b"/></g><g clip-path="url(#jirafe-head)" fill="#b8691f"><path d="M28 16 q4 -3 7 0 q0 4 -4 4 q-4 0 -3 -4z"/><path d="M26 26 q3 -2 5 1 q-1 4 -4 3 q-3 -1 -1 -4z"/></g><ellipse cx="40.5" cy="29" rx="2.4" ry="1.5" fill="#e9967a" opacity="0.8" transform="rotate(22 40.5 29)"/><g stroke="#3b2412" stroke-width="2.4" stroke-linejoin="round" stroke-linecap="round"><ellipse cx="48.5" cy="31.5" rx="8" ry="6.5" transform="rotate(22 48.5 31.5)" fill="#f7dca6"/><path d="M44 36.5 q3.5 2.2 7 1.2" fill="none" stroke-width="1.8"/></g><ellipse cx="52" cy="29.2" rx="1.3" ry="1" fill="#3b2412" transform="rotate(22 52 29.2)"/><circle cx="38" cy="22" r="3.1" fill="#3b2412"/><circle cx="39.1" cy="20.9" r="1.1" fill="#fff"/><path d="M34.5 18.5 q2.5 -2 5.5 -0.6" fill="none" stroke="#3b2412" stroke-width="1.6" stroke-linecap="round"/></svg><span class="name"><span><span class="j">J</span>irafe</span><span class="tagline">Jira, sans se casser le cou</span></span></span>
+  <div class="titles">
+    <span class="crumb" id="crumb">&nbsp;</span>
+    <h1><span id="sprint-name">Sprint</span>
+      <select id="sprint" aria-label="Change sprint" hidden></select>
+      <span id="remaining" class="remaining"></span></h1>
+  </div>
+  <span class="spacer"></span>
+  <!-- In the middle: how the board is looked at (view, theme). On the right, in the corner: its data. -->
+  <div class="view">
+    <span class="views" id="views" role="group" aria-label="Board view"></span>
+    <button type="button" class="icon-btn clear" id="clear-filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 4.5 H17.5 L11.8 11.3 V17 L8.2 18.8 V11.3 Z"/><path d="M15.5 15.5 L21 21 M21 15.5 L15.5 21"/></svg></button>
+    <span class="divider" aria-hidden="true"></span>
+    <button type="button" class="icon-btn" id="theme"></button>
+  </div>
+  <span class="spacer"></span>
+  <div class="right">
+    <div class="jira-load">
+      <button type="button" class="load-btn" id="load" aria-expanded="false" aria-controls="load-panel"></button>
+      <div class="load-panel" id="load-panel" hidden></div>
+    </div>
+    <span class="status" id="status"></span>
+    <div class="refresh-controls" role="group" aria-label="Refresh">
+      <label class="auto" id="auto-refresh-label"><input type="checkbox" id="autoRefresh" checked autocomplete="off"> Auto-refresh</label>
+      <button type="button" class="btn primary" id="refresh" title="Refresh now">Refresh</button>
+      <div class="freshness" id="freshness" hidden aria-hidden="true"></div>
+    </div>
+    <a class="btn" id="open-jira" target="_blank" rel="noopener">Open in Jira</a>
+  </div>
+</header>
+<div class="filters" id="filters"></div>
+<div id="errors"></div>
+<main><div class="board" id="board"><div class="skeleton">Loading the board…</div></div></main>
+<aside id="panel" hidden aria-label="Issue detail">
+  <div class="grip" id="panel-grip" title="Drag to resize"></div>
+  <div class="bar">
+    <a class="key" id="panel-key" target="_blank" rel="noopener"></a>
+    <span class="nav">↑ ↓ ← → navigate · Enter open in Jira · D side/bottom · Esc close</span>
+    <span class="spacer"></span>
+    <span class="sync" id="panel-sync"></span>
+    <button type="button" class="icon-btn" id="panel-dock"></button>
+    <button type="button" class="btn" id="panel-close">Close</button>
+  </div>
+  <div class="content" id="panel-content"></div>
+  <nav class="jump" aria-label="Go to a section of the detail">
+    <div class="sections" id="panel-sections"></div>
+    <button type="button" class="to-top" id="panel-top" title="Back to the top of the detail" aria-label="Back to the top of the detail">↑</button>
+  </nav>
+</aside>
+
+<div class="preview" id="preview" hidden><img alt=""><span class="loading">Loading…</span></div>
+
+<script id="config" type="application/json">__CONFIG__</script>
+<script>
+"use strict";
+
+const CONFIG = JSON.parse(document.getElementById("config").textContent);
+// Custom fields by role (storyPoints, developer…): their id differs from one Jira instance to another. A
+// role missing from the configuration is simply not shown.
+const custom = (fields, role) => CONFIG.fields?.[role] ? fields?.[CONFIG.fields[role]] : undefined;
+// No request while the page is hidden.
+const AUTO_REFRESH_MS = 5 * 60 * 1000;
+const AUTO_REFRESH_KEY = "sprint-board.autoRefresh";
+const FRESHNESS_SEGMENTS = 5;
+// When coming back to the tab, data older than this is refreshed right away.
+const STALE_ON_FOCUS_MS = 30 * 1000;
+// Quick filters, current user and board name: they almost never change.
+const META_TTL_MS = 12 * 3600 * 1000;
+// Local copy synced more recently than this: no new Jira call when opening. The server applies the same
+// threshold to its copy on disk, which the background sync may have refreshed in the meantime.
+const DETAIL_FRESH_MS = 30 * 1000;
+// Open panel: the local copy is read again (without calling Jira), to show what the background sync or
+// another tab has written to it.
+const DETAIL_POLL_MS = 15 * 1000;
+const DETAIL_CACHE_SIZE = 80;
+const HOVER_PREFETCH_MS = 120;
+// Labels shown upfront as buttons; the others go in the drop-down list.
+const TOP_LABELS = 5;
+// A label carried by more than this share of the sprint filters too little to earn a button by default.
+const BROAD_LABEL_SHARE = 0.4;
+// The user's label usage: each click adds 1 to a score that loses half its value every
+// LABEL_USAGE_HALF_LIFE_MS — frequency and recency in a single number.
+const LABEL_USAGE_KEY = "sprint-board.labelUsage";
+const LABEL_USAGE_HALF_LIFE_MS = 7 * 24 * 3600 * 1000;
+const LABEL_USAGE_SIZE = 60;
+// Remembered order of the label buttons: scores decide who gets in and who gets out, never who moves
+// ahead of whom — a button never moves under the cursor.
+const LABEL_ORDER_KEY = "sprint-board.labelOrder";
+const LABEL_ORDER_SIZE = 40;
+const AGILE_PAGE_SIZE = 50;
+const SNAPSHOT_KEY = `sprint-board.${CONFIG.boardId}`;
+const SNAPSHOT_VERSION = 1;
+const REFRESH_LOCK = `sprint-board.${CONFIG.boardId}.refresh`;
+const ALL_DATA = `rest/greenhopper/1.0/xboard/work/allData.json?rapidViewId=${CONFIG.boardId}`;
+// Jira Server's epic label palette (ghx-label-N classes).
+const EPIC_COLORS = {
+  "ghx-label-1": "#b39578", "ghx-label-2": "#ffc400", "ghx-label-3": "#ffe380", "ghx-label-4": "#79a6ff",
+  "ghx-label-5": "#a3bfde", "ghx-label-6": "#abf5d1", "ghx-label-7": "#e5a3d1", "ghx-label-8": "#c0b6f2",
+  "ghx-label-9": "#ff8f73", "ghx-label-10": "#b3d4ff", "ghx-label-11": "#79e2f2", "ghx-label-12": "#c1c7d0",
+  "ghx-label-13": "#57d9a3", "ghx-label-14": "#ff7452",
+};
+const THEME_KEY = "sprint-board.theme";
+const VIEW_KEY = "sprint-board.view";
+const DOCK_KEY = "sprint-board.panelDock";
+const PANEL_HEIGHT_KEY = "sprint-board.panelHeight";
+// Bounds of the detail height at the bottom, as a fraction of the window.
+const PANEL_MIN_HEIGHT = 0.2;
+const PANEL_MAX_HEIGHT = 0.8;
+// Board views, declared in the configuration (views): a board with many columns is split, for instance,
+// into Dev and QA. Each view starts at its `from` column and stops at the next view; a whole-board view is
+// added. Without configuration, no selector: a board with a few columns fits on the screen.
+// The first view is the default one; keys 1, 2, 3… follow the order.
+const VIEWS = CONFIG.views?.length
+  ? [...CONFIG.views.map((v, index) => ({ id: String(index), label: v.label, from: v.from })), { id: "all", label: "All" }]
+    .map((v, index) => ({ ...v, key: String(index + 1) }))
+  : [];
+const ASSIGNEE_IS_ME = /^\s*assignee\s*=\s*currentUser\(\)\s*$/i;
+const ASSIGNEE_IS = /^\s*assignee\s*=\s*(?:"([^"]+)"|([\w.@-]+))\s*$/i;
+const ASSIGNEE_NOT_IN = /^\s*assignee\s+not\s+in\s*\(([^)]*)\)\s*$/i;
+const ASSIGNEE_EMPTY = /^\s*assignee\s+(?:is\s+(?:empty|null)|=\s*(?:empty|null))\s*$/i;
+
+const $ = id => document.getElementById(id);
+const params = new URLSearchParams(location.search);
+
+const state = {
+  meta: null,
+  boards: {},
+  defaultSprint: null,
+  sprintId: Number(params.get("sprint")) || null,
+  quick: new Set((params.get("qf") || "").split(",").filter(Boolean).map(Number)),
+  labelOrder: readLabelOrder(),
+  labels: new Set((params.get("lb") || "").split(",").filter(Boolean).map(label => label.toLowerCase())),
+  q: params.get("q") || "",
+  refreshing: null,
+  lastFailure: null,
+  timer: null,
+  detail: new Map(),
+  detailLoading: new Map(),
+  openKey: null,
+  detailSyncing: null,
+  autoRefresh: readPreference(AUTO_REFRESH_KEY) !== "false",
+  dock: readPreference(DOCK_KEY) === "bottom" ? "bottom" : "side",
+  view: VIEWS.some(v => v.id === readPreference(VIEW_KEY)) ? readPreference(VIEW_KEY) : VIEWS[0]?.id ?? "all",
+};
+
+function readPreference(key) {
+  try {
+    return localStorage.getItem(key);
+  } catch (ignored) {
+    return null;
+  }
+}
+
+function savePreference(
+  key,
+  value
+) {
+  try {
+    localStorage.setItem(key, value);
+  } catch (ignored) { /* storage unavailable: the choice holds for this page only */ }
+}
+
+// ---------- Jira access ----------
+
+async function jira(path) {
+  for (let attempt = 0; ; attempt++) {
+    const response = await fetch("/jira/" + path);
+    // Jira sometimes returns transient 500s: a second attempt is almost always enough.
+    if (response.status >= 500 && attempt === 0) continue;
+    if (!response.ok) {
+      let message = response.statusText;
+      try {
+        const body = await response.json();
+        message = body.message || body.errorMessages?.join(", ") || message;
+      } catch (ignored) { /* non-JSON body */ }
+      throw new Error(`${response.status} ${message}`);
+    }
+    return response.json();
+  }
+}
+
+// Jira image URLs require authentication: they go through the relay.
+function relayed(url) {
+  if (!url) return url;
+  if (url.startsWith(CONFIG.jiraWeb + "/")) return "/jira/" + url.slice(CONFIG.jiraWeb.length + 1);
+  if (url.startsWith("/") && !url.startsWith("//")) return "/jira" + url;
+  return url;
+}
+
+const browseUrl = key => `${CONFIG.jiraWeb}/browse/${encodeURIComponent(key)}`;
+
+// ---------- Loading ----------
+
+async function ensureMeta() {
+  if (state.meta && Date.now() - state.meta.at < META_TTL_MS) return;
+  const [model, me] = await Promise.all([
+    jira(`rest/greenhopper/1.0/rapidviewconfig/editmodel.json?rapidViewId=${CONFIG.boardId}`),
+    jira("rest/api/2/myself"),
+  ]);
+  state.meta = {
+    at: Date.now(),
+    boardName: model.name ?? model.rapidView?.name ?? `Board ${CONFIG.boardId}`,
+    me: me.name,
+    quickFilters: (model.quickFilterConfig?.quickFilters ?? []).map(f => ({ id: f.id, name: f.name, query: f.query, description: f.description })),
+  };
+}
+
+// A quick filter on the assignee ("= X", "not in (…)", "is EMPTY") is evaluated in the page; any other JQL
+// is evaluated by Jira, which returns the matching issues at each refresh — the JQL is never approximated.
+function clientPredicate(filter) {
+  if (ASSIGNEE_IS_ME.test(filter.query)) {
+    return issue => Boolean(issue.assignee) && issue.assignee.toLowerCase() === state.meta.me.toLowerCase();
+  }
+  const match = filter.query.match(ASSIGNEE_IS);
+  if (match) {
+    const who = (match[1] ?? match[2]).toLowerCase();
+    return issue => Boolean(issue.assignee) && issue.assignee.toLowerCase() === who;
+  }
+  // Jira excludes unassigned issues from an "assignee not in (…)": such a board filter for unassigned work
+  // returns nothing. Here, unassigned counts as "not one of them", which is what the filter means.
+  const excluded = filter.query.match(ASSIGNEE_NOT_IN);
+  if (excluded) {
+    const team = new Set(excluded[1].split(",").map(name => name.trim().replace(/^"|"$/g, "").toLowerCase()));
+    return issue => !issue.assignee || !team.has(issue.assignee.toLowerCase());
+  }
+  if (ASSIGNEE_EMPTY.test(filter.query)) return issue => !issue.assignee;
+  return null;
+}
+
+async function fetchBoard(sprintId) {
+  const base = `${ALL_DATA}&activeSprints=${sprintId}`;
+  const serverFilters = state.meta.quickFilters.filter(f => !clientPredicate(f));
+  const [raw, labels, ...filtered] = await Promise.all([
+    jira(base),
+    fetchLabels(sprintId),
+    ...serverFilters.map(f => jira(`${base}&activeQuickFilters=${f.id}`)),
+  ]);
+  const board = toBoard(
+    raw,
+    sprintId
+  );
+  serverFilters.forEach((f, i) => { board.filterKeys[f.id] = filtered[i].issuesData.issues.map(issue => issue.key); });
+  for (const issue of board.issues) issue.labels = labels.get(issue.key) ?? [];
+  return board;
+}
+
+// allData.json does not carry labels: the agile API gives them for the whole sprint, in pages of 50.
+async function fetchLabels(sprintId) {
+  const labels = new Map();
+  for (let startAt = 0; ; startAt += AGILE_PAGE_SIZE) {
+    const page = await jira(`rest/agile/1.0/board/${CONFIG.boardId}/sprint/${sprintId}/issue?fields=labels&maxResults=${AGILE_PAGE_SIZE}&startAt=${startAt}`);
+    for (const issue of page.issues) labels.set(issue.key, issue.fields.labels ?? []);
+    if (!page.issues.length || startAt + page.issues.length >= page.total) return labels;
+  }
+}
+
+// Sprint labels, from most to least frequent. "front" and "FRONT" are the same label typed twice: they
+// are merged under the most used spelling.
+function sprintLabels(board) {
+  const byLabel = new Map();
+  for (const issue of board.issues) {
+    for (const label of new Set(issue.labels ?? [])) {
+      const id = label.toLowerCase();
+      const entry = byLabel.get(id) ?? { id, count: 0, spellings: new Map() };
+      entry.count++;
+      entry.spellings.set(label, (entry.spellings.get(label) ?? 0) + 1);
+      byLabel.set(id, entry);
+    }
+  }
+  return [...byLabel.values()]
+    .map(({ id, count, spellings }) => ({ id, count, name: [...spellings].sort((a, b) => b[1] - a[1])[0][0] }))
+    .sort((a, b) => b.count - a.count || a.name.localeCompare(b.name, undefined, { sensitivity: "base" }));
+}
+
+// Keeps only what is displayed: the saved copy stays small, and reading it back at startup is instant.
+function toBoard(
+  raw,
+  sprintId
+) {
+  const entities = raw.entityData;
+  return {
+    at: Date.now(),
+    sprintId,
+    sprints: raw.sprintsData.sprints.map(s => ({ id: s.id, name: s.name, start: s.startDate, end: s.endDate, days: s.daysRemaining, goal: s.goal })),
+    columns: raw.columnsData.columns.map(c => ({ name: c.name, statusIds: c.statusIds })),
+    issues: raw.issuesData.issues.filter(i => !i.hidden).map(i => ({
+      key: i.key,
+      summary: i.summary,
+      typeId: i.typeId,
+      priorityId: i.priorityId,
+      statusId: i.statusId,
+      done: i.done,
+      assignee: i.assignee ?? null,
+      assigneeName: i.assigneeName ?? null,
+      avatar: i.avatarUrl ?? null,
+      epicId: i.epicId ?? null,
+      points: i.estimateStatistic?.statFieldValue?.value ?? null,
+    })),
+    types: mapValues(entities.types, t => ({ name: t.typeName, url: t.typeUrl })),
+    priorities: mapValues(entities.priorities, p => ({ name: p.priorityName, url: p.priorityUrl })),
+    statuses: mapValues(entities.statuses, s => ({ name: s.statusName, category: s.status?.statusCategory?.key })),
+    epics: mapValues(entities.epics ?? {}, e => ({ key: e.epicField.epicKey, text: e.epicField.text, color: e.epicField.epicColor })),
+    filterKeys: {},
+  };
+}
+
+function mapValues(
+  object,
+  mapper
+) {
+  return Object.fromEntries(Object.entries(object ?? {}).map(([k, v]) => [k, mapper(v)]));
+}
+
+// Default sprint: the most recently started active sprint (Jira dates as dd/mm/yyyy hh:mm).
+function latestSprint(sprints) {
+  const started = s => {
+    const m = /^(\d{2})\/(\d{2})\/(\d{4}) (\d{2}):(\d{2})/.exec(s.start ?? "");
+    return m ? Date.UTC(m[3], m[2] - 1, m[1], m[4], m[5]) : 0;
+  };
+  return [...sprints].sort((a, b) => started(b) - started(a) || b.id - a.id)[0]?.id ?? null;
+}
+
+async function discoverDefaultSprint() {
+  const active = await jira(`rest/agile/1.0/board/${CONFIG.boardId}/sprint?state=active`);
+  return latestSprint(active.values.map(s => ({ id: s.id, start: s.startDate && toJiraDate(s.startDate) })));
+}
+
+function toJiraDate(iso) {
+  const d = new Date(iso);
+  const pad = n => String(n).padStart(2, "0");
+  return `${pad(d.getUTCDate())}/${pad(d.getUTCMonth() + 1)}/${d.getUTCFullYear()} ${pad(d.getUTCHours())}:${pad(d.getUTCMinutes())}`;
+}
+
+// One refresh at a time; concurrent requests wait for the same one.
+function refresh() {
+  state.refreshing ??= doRefresh().finally(() => {
+    state.refreshing = null;
+    $("refresh").disabled = false;
+    renderStatus();
+    scheduleAutoRefresh();
+  });
+  $("refresh").disabled = true;
+  renderStatus();
+  return state.refreshing;
+}
+
+async function doRefresh() {
+  try {
+    await ensureMeta();
+    state.defaultSprint ??= await discoverDefaultSprint();
+    const sprintId = currentSprintId();
+    const board = await fetchBoard(sprintId);
+    state.boards[sprintId] = board;
+    // A new sprint has started: switch to it, unless the URL explicitly asks for another one.
+    const latest = latestSprint(board.sprints);
+    const activeIds = new Set(board.sprints.map(s => s.id));
+    for (const id of Object.keys(state.boards)) if (!activeIds.has(Number(id))) delete state.boards[id];
+    const followDefault = !state.sprintId || state.sprintId === state.defaultSprint;
+    state.defaultSprint = latest;
+    if (followDefault && latest !== sprintId) {
+      state.sprintId = null;
+      state.boards[latest] = await fetchBoard(latest);
+    }
+    state.lastFailure = null;
+    saveSnapshot();
+    render();
+    prefetchOtherSprints();
+  } catch (error) {
+    state.lastFailure = { at: Date.now(), message: error.message };
+    if (!currentBoard()) showError(`Loading failed: ${error.message}`);
+  }
+}
+
+// The other active sprints are loaded in the background: switching between them is then instant.
+function prefetchOtherSprints() {
+  const board = currentBoard();
+  const others = board.sprints.filter(s => s.id !== board.sprintId && !(Date.now() - (state.boards[s.id]?.at ?? 0) < AUTO_REFRESH_MS));
+  if (!others.length) return;
+  const run = async () => {
+    for (const s of others) {
+      try {
+        state.boards[s.id] = await fetchBoard(s.id);
+      } catch (ignored) { /* best effort: it will be loaded on demand */ }
+    }
+    saveSnapshot();
+    renderHeader();
+  };
+  (window.requestIdleCallback ?? setTimeout)(run);
+}
+
+const currentSprintId = () => state.sprintId ?? state.defaultSprint;
+const currentBoard = () => state.boards[currentSprintId()];
+
+// ---------- Saved copy, shared between tabs ----------
+
+function saveSnapshot() {
+  try {
+    localStorage.setItem(SNAPSHOT_KEY, JSON.stringify({
+      version: SNAPSHOT_VERSION,
+      meta: state.meta,
+      defaultSprint: state.defaultSprint,
+      boards: state.boards,
+    }));
+  } catch (ignored) {
+    forgetSnapshot();
+  }
+}
+
+function readSnapshot() {
+  try {
+    const saved = JSON.parse(localStorage.getItem(SNAPSHOT_KEY));
+    return saved?.version === SNAPSHOT_VERSION ? saved : null;
+  } catch (ignored) {
+    forgetSnapshot();
+    return null;
+  }
+}
+
+function forgetSnapshot() {
+  try {
+    localStorage.removeItem(SNAPSHOT_KEY);
+  } catch (ignored) { /* storage unavailable: nothing to remove */ }
+}
+
+// Takes another tab's data if it is newer than what is displayed.
+function adoptNewerSnapshot() {
+  const saved = readSnapshot();
+  if (!saved) return false;
+  const shown = currentBoard()?.at ?? 0;
+  state.meta ??= saved.meta;
+  if (saved.meta && saved.meta.at > (state.meta?.at ?? 0)) state.meta = saved.meta;
+  state.defaultSprint ??= saved.defaultSprint;
+  for (const [id, board] of Object.entries(saved.boards ?? {})) {
+    if (!state.boards[id] || board.at > state.boards[id].at) state.boards[id] = board;
+  }
+  const adopted = (currentBoard()?.at ?? 0) > shown;
+  if (adopted) {
+    render();
+    scheduleAutoRefresh();
+  }
+  return adopted;
+}
+
+const age = () => Date.now() - (currentBoard()?.at ?? 0);
+
+// Under a lock: all tabs open on the board share a single refresh.
+async function sharedRefresh({ olderThan = 0 } = {}) {
+  const run = async () => {
+    adoptNewerSnapshot();
+    if (currentBoard() && age() < olderThan) {
+      scheduleAutoRefresh();
+      return;
+    }
+    await refresh();
+  };
+  if (navigator.locks) await navigator.locks.request(REFRESH_LOCK, run);
+  else await run();
+}
+
+// Next auto-refresh = last update + AUTO_REFRESH_MS: a manual refresh restarts the cycle. Hidden page: no
+// request; refreshing resumes when coming back to the tab.
+function scheduleAutoRefresh() {
+  clearTimeout(state.timer);
+  const board = currentBoard();
+  state.timer = state.autoRefresh && board && !document.hidden
+    ? setTimeout(() => sharedRefresh({ olderThan: AUTO_REFRESH_MS - 1000 }), Math.max(0, board.at + AUTO_REFRESH_MS - Date.now()))
+    : null;
+  renderFreshness();
+}
+
+// ---------- Rendering ----------
+
+function render() {
+  renderHeader();
+  renderFilters();
+  renderBoard();
+  renderStatus();
+}
+
+function renderHeader() {
+  const board = currentBoard();
+  $("crumb").textContent = state.meta?.boardName ?? "";
+  document.title = state.meta?.boardName ? `${sprintOf(board)?.name ?? "Sprint"} · Jirafe` : "Jirafe";
+  $("open-jira").href = `${CONFIG.jiraWeb}/secure/RapidBoard.jspa?rapidView=${CONFIG.boardId}` + (board ? `&sprint=${board.sprintId}` : "");
+  if (!board) return;
+  const sprint = sprintOf(board);
+  $("sprint-name").textContent = sprint?.name ?? "Sprint";
+  $("sprint-name").title = sprint?.goal || "";
+  const select = $("sprint");
+  select.hidden = board.sprints.length < 2;
+  select.innerHTML = `<option value="" disabled>Change sprint</option>` + board.sprints
+    .map(s => `<option value="${s.id}"${s.id === board.sprintId ? " selected" : ""}>${escapeHtml(s.name)}${state.boards[s.id] ? "" : " …"}</option>`)
+    .join("");
+  const remaining = $("remaining");
+  remaining.classList.toggle("over", sprint?.days === 0);
+  remaining.textContent = sprint ? (sprint.days > 0 ? `⏱ ${sprint.days} day${sprint.days > 1 ? "s" : ""} left` : `⏱ past due (${sprint.end?.slice(0, 10)})`) : "";
+}
+
+const sprintOf = board => board?.sprints.find(s => s.id === board.sprintId);
+
+function isPersonFilter(id) {
+  const filter = state.meta?.quickFilters.find(f => f.id === id);
+  return Boolean(filter) && [ASSIGNEE_IS_ME, ASSIGNEE_IS, ASSIGNEE_NOT_IN, ASSIGNEE_EMPTY].some(pattern => pattern.test(filter.query));
+}
+
+// The "assignee = <me>" filter: highlighted, to find oneself at a glance in the alphabetical list.
+// The last letter of the first name is isolated: it carries the giraffe horns.
+function myName(name) {
+  const letters = Array.from(name);
+  const end = letters.findIndex((letter, index) => index > 0 && /\s/.test(letter));
+  const last = (end < 0 ? letters.length : end) - 1;
+  if (last < 0) return escapeHtml(name);
+  return escapeHtml(letters.slice(0, last).join("")) +
+    `<span class="horned">${escapeHtml(letters[last])}</span>` +
+    escapeHtml(letters.slice(last + 1).join(""));
+}
+
+function isMyFilter(filter) {
+  const match = filter.query.match(ASSIGNEE_IS);
+  return Boolean(match && state.meta?.me) && (match[1] ?? match[2]).toLowerCase() === state.meta.me.toLowerCase();
+}
+
+// Jira shows quick filters in the order the board administrator created them, which means nothing. Here:
+// people in alphabetical order, then unassigned and "my issues", then the rest in Jira's order.
+function displayOrder(filters) {
+  const rank = f => ASSIGNEE_IS.test(f.query) ? 0 : isPersonFilter(f.id) ? 1 : 2;
+  return filters
+    .map((filter, index) => ({ filter, index }))
+    .sort((a, b) => rank(a.filter) - rank(b.filter)
+      || (rank(a.filter) === 0 ? a.filter.name.localeCompare(b.filter.name, undefined, { sensitivity: "base" }) : 0)
+      || a.index - b.index)
+    .map(({ filter }) => filter);
+}
+
+function renderFilters() {
+  const board = currentBoard();
+  const filters = displayOrder(state.meta?.quickFilters ?? []);
+  $("filters").innerHTML =
+    (filters.length ? `<span class="label">QUICK FILTERS:</span>` : "") +
+    filters.map((f, index) => (index > 0 && isPersonFilter(filters[index - 1].id) && !isPersonFilter(f.id) ? `<span class="qf-sep" aria-hidden="true"></span>` : "") +
+      `<button type="button" class="qf${isMyFilter(f) ? " me" : ""}" data-qf="${f.id}" aria-pressed="${state.quick.has(f.id)}" ` +
+      `title="${isMyFilter(f) ? "You · " : ""}${escapeHtml(f.description || f.query)}">${isMyFilter(f) ? myName(f.name) : escapeHtml(f.name)}</button>`).join("") +
+    labelsHtml(board) +
+    `<span class="search"><input id="q" type="search" placeholder="Search (key, summary, person, epic)  /" value="${escapeHtml(state.q)}" aria-label="Search">` +
+    (board ? `<span class="count">${countText(board)}</span>` : "") + `</span>`;
+}
+
+// Issues and story points displayed — view columns and filters — out of the sprint total:
+// "21 / 49 · 37 / 94 pts". In a Dev view, for instance, the share left on the dev side.
+function countText(board) {
+  const columns = new Set(viewColumns(board, state.view).flatMap(index => board.columns[index].statusIds));
+  const shown = visibleIssues(board).filter(issue => columns.has(issue.statusId));
+  // Rounded to one decimal: 0.1 + 0.2 is not displayed as "0.30000000000000004".
+  const points = issues => formatPoints(Math.round(issues.reduce((sum, issue) => sum + (issue.points ?? 0), 0) * 10) / 10);
+  return `${shown.length} / ${board.issues.length} · ${points(shown)} / ${points(board.issues)} pts`;
+}
+
+// Label buttons, in a stable order: a slot only changes hands to let in an active label (picked from the
+// list), and the least used inactive button then gives it up; the others do not move. Free slots are filled
+// with the labels the user uses most, then with the sprint's most frequent ones, except those too
+// widespread to filter usefully.
+function labelsHtml(board) {
+  const labels = board ? sprintLabels(board) : [];
+  // Active label missing from the sprint (shared link, other sprint): shown at 0, so it can be removed.
+  for (const id of state.labels) if (!labels.some(label => label.id === id)) labels.push({ id, count: 0, name: id });
+  if (!labels.length) return "";
+  const byId = new Map(labels.map(label => [label.id, label]));
+  const top = buttonLabels(
+    byId,
+    board
+  );
+  const shown = top.map(id => byId.get(id));
+  const others = labels.filter(label => !top.includes(label.id));
+  return `<span class="qf-sep labels-sep" aria-hidden="true"></span><span class="label">LABELS:</span>` +
+    shown.map(label => `<button type="button" class="qf" data-label="${escapeHtml(label.id)}" aria-pressed="${state.labels.has(label.id)}" ` +
+      `title="${label.count} issue(s) in the sprint">${escapeHtml(label.name)}<span class="n">${label.count}</span></button>`).join("") +
+    (others.length
+      ? `<select id="more-labels" class="more-labels" aria-label="Other labels"><option value="">+ ${others.length} more</option>` +
+        others.map(label => `<option value="${escapeHtml(label.id)}">${escapeHtml(label.name)} (${label.count})</option>`).join("") + `</select>`
+      : "");
+}
+
+// Ids of the labels shown as buttons, in the remembered order; the order is completed and saved on the
+// way. It spans all sprints: a label missing from this one keeps its slot for the next sprint using it.
+function buttonLabels(
+  byId,
+  board
+) {
+  const usage = labelUsageScores();
+  const order = state.labelOrder;
+  const before = order.join();
+  const top = order.filter(id => byId.has(id)).slice(0, TOP_LABELS);
+  // Least used first; on a tie, the least present in the sprint.
+  const coldness = id => [usage.get(id) ?? 0, byId.get(id).count];
+  const colder = (a, b) => coldness(a)[0] - coldness(b)[0] || coldness(a)[1] - coldness(b)[1];
+  const place = id => {
+    if (order.includes(id)) order.splice(order.indexOf(id), 1);
+    const inactive = top.filter(other => !state.labels.has(other));
+    if (top.length >= TOP_LABELS && inactive.length) {
+      const evicted = inactive.sort(colder)[0];
+      order[order.indexOf(evicted)] = id;
+      top[top.indexOf(evicted)] = id;
+      return;
+    }
+    order.splice(top.length ? order.indexOf(top.at(-1)) + 1 : 0, 0, id);
+    top.push(id);
+  };
+  for (const id of state.labels) if (!top.includes(id)) place(id);
+  const broad = board ? board.issues.length * BROAD_LABEL_SHARE : Infinity;
+  const candidates = [...byId.values()]
+    .filter(label => usage.has(label.id) || label.count <= broad)
+    .sort((a, b) => (usage.get(b.id) ?? 0) - (usage.get(a.id) ?? 0) || b.count - a.count);
+  for (const label of candidates) {
+    if (top.length >= TOP_LABELS) break;
+    if (!top.includes(label.id)) place(label.id);
+  }
+  order.splice(LABEL_ORDER_SIZE);
+  if (order.join() !== before) savePreference(LABEL_ORDER_KEY, JSON.stringify(order));
+  return top;
+}
+
+function readLabelOrder() {
+  try {
+    const order = JSON.parse(readPreference(LABEL_ORDER_KEY));
+    return Array.isArray(order) ? order.filter(id => typeof id === "string") : [];
+  } catch (ignored) {
+    return [];
+  }
+}
+
+// Usage scores brought back to now: a label left unused for weeks makes room for the others.
+function labelUsageScores() {
+  const now = Date.now();
+  return new Map(Object.entries(readLabelUsage())
+    .map(([id, { score, at }]) => [id, score * 0.5 ** ((now - at) / LABEL_USAGE_HALF_LIFE_MS)]));
+}
+
+function recordLabelUse(id) {
+  const now = Date.now();
+  const scores = labelUsageScores();
+  scores.set(id, (scores.get(id) ?? 0) + 1);
+  // The least used drop beyond LABEL_USAGE_SIZE: the preference stays small.
+  const kept = [...scores].sort((a, b) => b[1] - a[1]).slice(0, LABEL_USAGE_SIZE);
+  savePreference(LABEL_USAGE_KEY, JSON.stringify(Object.fromEntries(kept.map(([key, score]) => [key, { score, at: now }]))));
+}
+
+function readLabelUsage() {
+  try {
+    const usage = JSON.parse(readPreference(LABEL_USAGE_KEY));
+    return usage && typeof usage === "object" ? usage : {};
+  } catch (ignored) {
+    return {};
+  }
+}
+
+function clearFilters() {
+  state.quick.clear();
+  state.labels.clear();
+  state.q = "";
+  writeUrl();
+  renderFilters();
+  renderBoard();
+}
+
+function renderClearFilters() {
+  const active = [
+    ...state.quick.size ? [`${state.quick.size} quick filter(s)`] : [],
+    ...state.labels.size ? [`${state.labels.size} label(s)`] : [],
+    ...state.q ? [`the search "${state.q}"`] : [],
+  ];
+  const button = $("clear-filters");
+  button.disabled = !active.length;
+  button.title = active.length ? `Clear filters: ${active.join(", ")}` : "No active filter";
+  button.setAttribute("aria-label", button.title);
+}
+
+function toggleLabel(id) {
+  if (!state.labels.delete(id)) {
+    state.labels.add(id);
+    recordLabelUse(id);
+  }
+  writeUrl();
+  renderFilters();
+  renderBoard();
+}
+
+// Column indices of a view: from its start column to the next start, whatever the declaration order. A
+// view whose column does not exist (renamed in Jira) shows the whole board.
+function viewColumns(
+  board,
+  view
+) {
+  const all = board.columns.map((column, index) => index);
+  const selected = VIEWS.find(v => v.id === view);
+  if (!selected?.from) return all;
+  const start = columnIndex(
+    board,
+    selected
+  );
+  if (start < 0) return all;
+  const starts = VIEWS.filter(v => v.from).map(v => columnIndex(board, v));
+  const end = Math.min(...starts.filter(s => s > start), all.length);
+  return all.slice(start, end);
+}
+
+// Missing columns already reported: the board is redrawn often, the warning is only shown once.
+const warnedColumns = new Set();
+
+function columnIndex(
+  board,
+  view
+) {
+  const index = board.columns.findIndex(c => c.name.toLocaleLowerCase() === view.from.toLocaleLowerCase());
+  if (index < 0 && !warnedColumns.has(view.from)) {
+    warnedColumns.add(view.from);
+    showError(
+      `View "${view.label}": no column "${view.from}" on the board ` +
+      `(columns: ${board.columns.map(c => c.name).join(", ")}). Fix "views" in the configuration.`
+    );
+  }
+  return index;
+}
+
+function renderViews(
+  board,
+  columnIssues
+) {
+  $("views").hidden = !VIEWS.length;
+  $("views").innerHTML = VIEWS.map(v => {
+    const count = viewColumns(board, v.id).reduce((sum, index) => sum + columnIssues[index].length, 0);
+    return `<button type="button" data-view="${v.id}" aria-pressed="${state.view === v.id}" title="${v.label} view (key ${v.key})">` +
+      `${v.label}<span class="n">${count}</span></button>`;
+  }).join("");
+}
+
+function setView(view) {
+  if (view === state.view) return;
+  state.view = view;
+  savePreference(
+    VIEW_KEY,
+    view
+  );
+  renderBoard();
+}
+
+// Quick filters add up (AND), as in Jira.
+function visibleIssues(board) {
+  const active = (state.meta?.quickFilters ?? []).filter(f => state.quick.has(f.id)).map(f => filterPredicate(
+    f,
+    board
+  ));
+  const words = normalize(state.q).split(/\s+/).filter(Boolean);
+  const labels = [...state.labels];
+  return board.issues.filter(issue =>
+    active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && (!words.length || words.every(w => haystack(issue, board).includes(w)))
+  );
+}
+
+function filterPredicate(
+  filter,
+  board
+) {
+  const client = clientPredicate(filter);
+  if (client) return client;
+  const keys = board.filterKeys?.[filter.id];
+  if (!keys) return () => true;
+  const set = new Set(keys);
+  return issue => set.has(issue.key);
+}
+
+function haystack(
+  issue,
+  board
+) {
+  const epic = board.epics[issue.epicId];
+  return normalize(`${issue.key} ${issue.summary} ${issue.assigneeName ?? ""} ${epic?.text ?? ""} ${epic?.key ?? ""} ${(issue.labels ?? []).join(" ")}`);
+}
+
+const normalize = text => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
+
+function renderBoard() {
+  // During a drag, rebuilding the cards would remove the one being held: rendering is deferred to the drop.
+  if (drag?.started) {
+    state.renderLater = true;
+    return;
+  }
+  state.renderLater = false;
+  const board = currentBoard();
+  if (!board) {
+    $("board").innerHTML = `<div class="skeleton">Loading the board…</div>`;
+    return;
+  }
+  assignHues(board);
+  const columnOf = new Map();
+  board.columns.forEach((c, index) => c.statusIds.forEach(id => columnOf.set(id, index)));
+  const columns = board.columns.map(() => []);
+  for (const issue of visibleIssues(board)) columns[columnOf.get(issue.statusId)]?.push(issue);
+  renderViews(
+    board,
+    columns
+  );
+  renderClearFilters();
+  // The count follows the view and the search, which only redraw the board, not the filter bar.
+  const count = document.querySelector(".filters .count");
+  if (count) count.textContent = countText(board);
+  // Columns outside the view: neither rendered nor laid out, not just hidden with CSS.
+  const shown = viewColumns(board, state.view).map(index => ({ column: board.columns[index], index }));
+  $("board").style.setProperty("--cols", shown.length);
+  $("board").innerHTML = shown.map(({ column, index }) => {
+    const issues = columns[index];
+    const points = issues.reduce((sum, i) => sum + (i.points ?? 0), 0);
+    return `<section class="column" data-col="${index}"><h2><span>${escapeHtml(column.name)}</span>` +
+      `<span class="n" title="${issues.length} issue(s), ${formatPoints(points)} point(s)">${issues.length}${points ? ` · ${formatPoints(points)} pts` : ""}</span></h2>` +
+      `<div class="cards">${issues.length ? issues.map(i => card(i, board)).join("") : `<div class="empty-col">—</div>`}</div></section>`;
+  }).join("");
+}
+
+// Readable first name next to the avatar: the one of the person's quick filter ("Alice") when it exists,
+// since it is the name the team uses; otherwise the first word of the Jira name, case normalised
+// ("ALICE" → "Alice").
+function firstName(
+  login,
+  name
+) {
+  if (!login) return "Unassigned";
+  const filter = state.meta?.quickFilters.find(f => f.query.match(ASSIGNEE_IS)?.slice(1).some(who => who?.toLowerCase() === login.toLowerCase()));
+  if (filter) return filter.name;
+  const first = (name ?? login).split(/\s+/)[0];
+  return first.charAt(0).toUpperCase() + first.slice(1).toLowerCase();
+}
+
+function card(
+  issue,
+  board
+) {
+  const epic = board.epics[issue.epicId];
+  const classes = ["card", issue.done ? "done" : "", issue.key === state.openKey ? "selected" : ""].filter(Boolean).join(" ");
+  return `<a class="${classes}" href="${browseUrl(issue.key)}" data-key="${escapeHtml(issue.key)}">` +
+    `<div class="top"><span class="key">${escapeHtml(issue.key)}</span>` +
+    `<span class="who"><span class="first-name">${escapeHtml(firstName(issue.assignee, issue.assigneeName))}</span>${avatar(issue.assignee, issue.assigneeName, issue.avatar)}</span></div>` +
+    `<div class="summary">${escapeHtml(issue.summary)}</div>` +
+    (epic ? `<span class="epic" style="--epic:${EPIC_COLORS[epic.color] ?? "#c1c7d0"}" title="${escapeHtml(epic.key)}">${escapeHtml(epic.text)}</span>` : "") +
+    `<div class="foot">${icon(board.types[issue.typeId])}${icon(board.priorities[issue.priorityId])}` +
+    (issue.points != null ? `<span class="sp" title="Story points">${formatPoints(issue.points)}</span>` : "") +
+    `</div></a>`;
+}
+
+function icon(entity) {
+  return entity?.url
+    ? `<img class="icon" src="${escapeHtml(relayed(entity.url))}" alt="${escapeHtml(entity.name)}" title="${escapeHtml(entity.name)}" width="16" height="16" decoding="async">`
+    : "";
+}
+
+// Initials are always drawn, covered by the photo when it loads.
+// Hand-picked palette rather than a colour wheel: bold, nameable colours, without purple or pink, all
+// readable under white initials. Ordered so that the first ones are the furthest apart.
+const AVATAR_COLORS = [
+  "#2f7fd1", // blue
+  "#2e9e5b", // green
+  "#d9622b", // orange
+  "#c43d3d", // red
+  "#178c96", // turquoise
+  "#8a5a3c", // brown
+  "#7a8b2e", // olive
+  "#5b6b7c", // slate
+];
+
+// Colours handed out only to the board's assignees shown as initials (those with a Jira photo do not need
+// one): up to 8, two people never share one. Outside the board (reporter, commenters), a hash of the login.
+const avatarColors = new Map();
+
+function assignHues(board) {
+  // Gravatar counts as initials: whether it has a real photo is only known once loaded.
+  const initialsOnly = board.issues.filter(i => i.assignee && !/[?&]ownerId=/.test(i.avatar ?? "")).map(i => i.assignee);
+  avatarColors.clear();
+  [...new Set(initialsOnly)].sort().forEach((login, index) => avatarColors.set(login, AVATAR_COLORS[index % AVATAR_COLORS.length]));
+}
+
+// Default avatar from Jira (no ownerId) or Gravatar ("mm" silhouette): an anonymous silhouette that would
+// hide the initials. Gravatar answers 404 without a real avatar, and the image is then removed.
+function personalAvatar(url) {
+  if (!url) return null;
+  if (/gravatar\.com/.test(url)) return url.replace(/([?&])d=[^&]*/, "$1d=404");
+  return /[?&]ownerId=/.test(url) ? url : null;
+}
+
+function avatar(
+  login,
+  name,
+  url
+) {
+  if (!login) {
+    return `<span class="avatar none" title="Unassigned" aria-label="Unassigned">` +
+      `<svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="8" r="4" fill="currentColor"/>` +
+      `<path d="M4 21c0-4.4 3.6-7 8-7s8 2.6 8 7z" fill="currentColor"/></svg><span class="q">?</span></span>`;
+  }
+  const label = name ?? login;
+  const initials = label.split(/\s+/).filter(Boolean).map(part => part[0]).join("").slice(0, 2).toUpperCase();
+  const color = avatarColors.get(login) ?? AVATAR_COLORS[[...login].reduce((sum, char) => (sum * 31 + char.charCodeAt(0)) % AVATAR_COLORS.length, 7)];
+  const image = personalAvatar(url);
+  const img = image ? `<img src="${escapeHtml(relayed(image))}" alt="" loading="lazy" decoding="async" referrerpolicy="no-referrer" onerror="this.remove()">` : "";
+  return `<span class="avatar" style="--avatar-bg:${color}" title="${escapeHtml(label)}">${escapeHtml(initials)}${img}</span>`;
+}
+
+const formatPoints = n => String(n);
+
+// Absolute time and day: a screenshot still tells how old the data is.
+function renderStatus() {
+  const board = currentBoard();
+  const time = at => new Date(at).toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const parts = [];
+  if (board) {
+    const date = new Date(board.at).toLocaleDateString("en-GB");
+    parts.push(`<span>updated at ${time(board.at)} on ${date} (${escapeHtml(compactDuration(Date.now() - board.at))} ago)</span>`);
+  }
+  if (state.refreshing) parts.push(`<span class="progress">Refreshing…</span>`);
+  if (state.lastFailure) parts.push(`<span class="failed" title="${escapeHtml(state.lastFailure.message)}">Failed at ${time(state.lastFailure.at)} — showing previous data</span>`);
+  $("status").innerHTML = parts.join("");
+}
+
+// ---------------------------------------------------------------------------------------------------
+// Load put on Jira: requests made by the Jirafe server (all tabs and background sync together) over 1, 5
+// and 15 minutes. /stats is served locally, without calling Jira.
+
+const LOAD_REFRESH_MS = 1000;
+const LOAD_WINDOWS = ["1m", "5m", "15m"];
+const LOAD_ORIGINS = [
+  ["page", "Board", "refresh of the open tabs"],
+  ["detail", "Issue detail", "when opened, if the copy is older than 30 s"],
+  ["images", "Images", "icons, avatars, attachment previews; kept for a day by the browser"],
+  ["sync", "Background sync", "every 5 min, copies the issues changed in Jira locally"],
+  ["write", "Writes", "reordering"],
+];
+
+function refreshLoad() {
+  if (document.hidden) return;
+  fetch("/stats")
+    .then(response => response.ok ? response.json() : null)
+    .then(stats => { if (stats) renderLoad(stats); })
+    .catch(() => {});
+}
+
+function renderLoad(stats) {
+  const total = window => stats.windows[window]?.total ?? 0;
+  $("load").title = "Requests sent to Jira by Jirafe over the last minute, the last 5 and the last 15 minutes";
+  $("load").innerHTML = `<span>Jira requests · 1 / 5 / 15 min</span>` +
+    `<span class="values"><b>${total("1m")}</b><span class="sep"> · </span>${total("5m")}<span class="sep"> · </span>${total("15m")}</span>`;
+  const count = (window, origin) => stats.windows[window]?.byOrigin?.[origin] ?? 0;
+  const rows = LOAD_ORIGINS.map(([origin, label, hint]) =>
+    `<tr><td>${label}<span class="hint">${hint}</span></td>${LOAD_WINDOWS.map(window => `<td>${count(window, origin)}</td>`).join("")}</tr>`
+  ).join("");
+  const since = compactDuration(Date.now() - stats.startedAt);
+  $("load-panel").innerHTML = `<h4>Requests sent to Jira</h4>` +
+    `<table><thead><tr><th></th><th>1 min</th><th>5 min</th><th>15 min</th></tr></thead>` +
+    `<tbody>${rows}</tbody>` +
+    `<tfoot><tr><td>Total</td>${LOAD_WINDOWS.map(window => `<td>${total(window)}</td>`).join("")}</tr></tfoot></table>` +
+    `<p>${stats.sinceStart} request${stats.sinceStart > 1 ? "s" : ""} since the server started (${escapeHtml(since)} ago), ` +
+    `i.e. ${formatPoints(Math.round(stats.sinceStart / Math.max(1, (Date.now() - stats.startedAt) / 60000) * 10) / 10)} per minute on average.</p>`;
+}
+
+function toggleLoadPanel(open) {
+  $("load-panel").hidden = !open;
+  $("load").setAttribute("aria-expanded", String(open));
+  if (open) refreshLoad();
+}
+
+$("load").addEventListener("click", () => toggleLoadPanel($("load-panel").hidden));
+document.addEventListener("click", e => {
+  if (!$("load-panel").hidden && !e.target.closest(".jira-load")) toggleLoadPanel(false);
+});
+
+function compactDuration(ms) {
+  const minutes = Math.max(0, Math.floor(ms / 60000));
+  if (minutes < 1) return "< 1 min";
+  if (minutes < 60) return `${minutes} min`;
+  const hours = Math.floor(minutes / 60);
+  if (hours < 24) return `${hours}h${minutes % 60 ? String(minutes % 60).padStart(2, "0") : ""}`;
+  const rest = hours % 24;
+  return `${Math.floor(hours / 24)} d${rest ? ` ${rest}h` : ""}`;
+}
+
+// Recreating the segments restarts their animations; the negative delay puts them at the time already
+// elapsed. The rightmost segment fades after one minute, the leftmost at the refresh.
+function renderFreshness() {
+  const bar = $("freshness");
+  bar.hidden = !state.autoRefresh || !currentBoard() || document.hidden;
+  if (bar.hidden) return;
+  bar.style.setProperty("--cycle", `${AUTO_REFRESH_MS}ms`);
+  bar.style.setProperty("--delay", `${-Math.min(age(), AUTO_REFRESH_MS)}ms`);
+  bar.innerHTML = Array.from(
+    { length: FRESHNESS_SEGMENTS },
+    (_, i) => `<i style="--off:${AUTO_REFRESH_MS * (FRESHNESS_SEGMENTS - i) / FRESHNESS_SEGMENTS}ms"></i>`
+  ).join("");
+}
+
+function relative(at) {
+  const seconds = Math.round((Date.now() - at) / 1000);
+  if (seconds < 45) return "just now";
+  const minutes = Math.round(seconds / 60);
+  if (minutes < 60) return `${minutes} min ago`;
+  const hours = Math.round(minutes / 60);
+  return hours < 24 ? `${hours} h ago` : `${Math.round(hours / 24)} d ago`;
+}
+
+function showError(message) {
+  $("errors").insertAdjacentHTML("beforeend", `<div class="error-banner">${escapeHtml(message)}</div>`);
+}
+
+function escapeHtml(value) {
+  return String(value ?? "").replace(/[&<>"']/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" })[c]);
+}
+
+// ---------- Issue detail ----------
+
+// Two sources: the local copy kept by the server (a file read, instant) and the on-demand sync, which
+// queries Jira. Hovering a card only reads the local copy: it costs nothing.
+// mode: "local" (local copy only), "sync" (Jira if the copy is stale) or "force" (Jira no matter what).
+const ISSUE_QUERY = { local: "", sync: "?sync=1", force: "?sync=1&force=1" };
+
+async function fetchIssue(
+  key,
+  mode
+) {
+  const response = await fetch(`/issue/${encodeURIComponent(key)}${ISSUE_QUERY[mode]}`);
+  if (response.status === 404) return null;
+  const body = await response.json();
+  if (!response.ok) throw new Error(body.message || `${response.status}`);
+  return body;
+}
+
+function remember(entry) {
+  if (!entry) return;
+  state.detail.delete(entry.key);
+  state.detail.set(entry.key, entry);
+  if (state.detail.size > DETAIL_CACHE_SIZE) state.detail.delete(state.detail.keys().next().value);
+}
+
+function prefetchLocal(key) {
+  if (state.detail.has(key) || state.detailLoading.has(key)) return;
+  state.detailLoading.set(key, fetchIssue(
+    key,
+    "local"
+  ).then(remember).catch(() => {}).finally(() => state.detailLoading.delete(key)));
+}
+
+async function openDetail(key) {
+  state.openKey = key;
+  for (const el of document.querySelectorAll(".card.selected")) el.classList.remove("selected");
+  const cardEl = document.querySelector(`.card[data-key="${CSS.escape(key)}"]`);
+  cardEl?.classList.add("selected");
+  cardEl?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  // Focus follows the selection: otherwise it stays on the last clicked card and the keyboard acts on it.
+  if (cardEl && document.activeElement !== $("q")) cardEl.focus({ preventScroll: true });
+  if (cardEl && state.dock === "side") {
+    const box = cardEl.getBoundingClientRect();
+    $("panel").classList.toggle("left", box.left + box.width / 2 > document.documentElement.clientWidth / 2);
+  }
+  $("panel").hidden = false;
+  // At the bottom, the panel shrinks the board: the card is only scrolled into view once the panel is shown.
+  if (state.dock === "bottom") cardEl?.scrollIntoView({ block: "nearest", inline: "nearest" });
+  const token = Symbol(key);
+  state.openToken = token;
+  if (!state.detail.has(key)) {
+    renderDetail(key, { syncing: true });
+    remember(await fetchIssue(
+      key,
+      "local"
+    ).catch(() => null));
+    if (state.openToken !== token) return;
+  }
+  const cached = state.detail.get(key);
+  if (cached && Date.now() - Date.parse(cached.syncedAt) < DETAIL_FRESH_MS) {
+    renderDetail(key, {});
+    return;
+  }
+  await syncDetail(
+    key,
+    "sync"
+  );
+}
+
+async function syncDetail(
+  key,
+  mode
+) {
+  const token = state.openToken;
+  const current = () => state.openToken === token;
+  state.detailSyncing = key;
+  renderDetail(key, { syncing: true });
+  try {
+    const fresh = await fetchIssue(
+      key,
+      mode
+    );
+    remember(fresh);
+    if (current()) renderDetail(key, { syncError: fresh?.syncError });
+  } catch (error) {
+    if (current()) renderDetail(key, { syncError: error.message });
+  } finally {
+    if (state.detailSyncing === key) state.detailSyncing = null;
+  }
+}
+
+// What the background sync has written since opening is shown without asking Jira anything.
+async function reloadOpenDetail() {
+  const key = state.openKey;
+  if (!key || document.hidden || state.detailSyncing === key || drag?.started) return;
+  const entry = await fetchIssue(
+    key,
+    "local"
+  ).catch(() => null);
+  const shown = state.detail.get(key);
+  if (!entry || state.openKey !== key || state.detailSyncing === key) return;
+  if (shown && Date.parse(entry.syncedAt) <= Date.parse(shown.syncedAt)) return;
+  remember(entry);
+  renderDetail(key, {});
+}
+
+function closeDetail() {
+  hidePreview();
+  state.openKey = null;
+  state.openToken = null;
+  $("panel").hidden = true;
+  for (const el of document.querySelectorAll(".card.selected")) el.classList.remove("selected");
+}
+
+function renderDetail(
+  key,
+  { syncing = false, syncError = null }
+) {
+  const board = currentBoard();
+  const issue = board?.issues.find(i => i.key === key);
+  const entry = state.detail.get(key);
+  const data = entry?.data;
+  $("panel-sync").innerHTML = syncing
+    ? `<span class="muted">Syncing with Jira…</span>` + (entry ? ` <span class="muted">(copy from ${escapeHtml(formatDate(entry.syncedAt))})</span>` : "")
+    : entry
+      ? `<button type="button" class="resync ${syncError ? "sync-failed" : "muted"}" title="${escapeHtml(syncError ? `${syncError} — click to retry` : "Click to resync from Jira")}">${syncError ? "Sync failed · local copy synced" : "Synced"} ${relative(Date.parse(entry.syncedAt))}</button>`
+      : "";
+  $("panel-key").textContent = key;
+  $("panel-key").href = browseUrl(key);
+  const f = data?.fields;
+  const status = f ? { name: f.status.name, category: f.status.statusCategory?.key } : board?.statuses[issue?.statusId];
+  const epic = issue && board.epics[issue.epicId];
+  const points = f ? custom(f, "storyPoints") : issue?.points;
+  const facts = [
+    ["Status", status ? `<span class="status-pill ${escapeHtml(status.category ?? "")}">${escapeHtml(status.name)}</span>` : ""],
+    ["Resolution", f?.resolution ? escapeHtml(f.resolution.name) + (f.resolutiondate ? ` <span class="muted">on ${formatDate(f.resolutiondate)}</span>` : "") : null],
+    ["Type", f ? `${icon({ url: f.issuetype.iconUrl, name: f.issuetype.name })}${escapeHtml(f.issuetype.name)}` : issue ? `${icon(board.types[issue.typeId])}${escapeHtml(board.types[issue.typeId]?.name)}` : ""],
+    ["Priority", f?.priority ? `${icon({ url: f.priority.iconUrl, name: f.priority.name })}${escapeHtml(f.priority.name)}` : issue ? `${icon(board.priorities[issue.priorityId])}${escapeHtml(board.priorities[issue.priorityId]?.name)}` : ""],
+    ["Criticality", custom(f, "criticality") ? escapeHtml(custom(f, "criticality").value) : null],
+    ["Story points", points != null ? `<span class="sp">${formatPoints(points)}</span>` : "—"],
+    GROUP,
+    ["Assignee", person(f ? f.assignee : issue && { name: issue.assignee, displayName: issue.assigneeName, avatarUrls: { "48x48": issue.avatar } })],
+    ["Developer", custom(f, "developer") ? person(custom(f, "developer")) : null],
+    ["Tester", custom(f, "tester") ? person(custom(f, "tester")) : null],
+    ["Reporter", f ? person(f.reporter) : null],
+    GROUP,
+    ["Epic", epic ? `<span class="epic" style="--epic:${EPIC_COLORS[epic.color] ?? "#c1c7d0"}">${escapeHtml(epic.text)}</span> <a href="${browseUrl(epic.key)}" target="_blank" rel="noopener">${escapeHtml(epic.key)}</a>` : null],
+    ["Sprints", sprintsHtml(custom(f, "sprints"))],
+    ["Version", f?.fixVersions?.length ? f.fixVersions.map(v => `<span class="tag">${escapeHtml(v.name)}</span>`).join("") : null],
+    ["Components", f?.components?.length ? f.components.map(c => `<span class="tag">${escapeHtml(c.name)}</span>`).join("") : null],
+    ["Labels", f?.labels?.length ? f.labels.map(l => `<span class="tag">${escapeHtml(l)}</span>`).join("") : null],
+    ["Environments", custom(f, "environments")?.length ? custom(f, "environments").map(e => `<span class="tag">${escapeHtml(e.value)}</span>`).join("") : null],
+    ["Due date", f?.duedate ? escapeHtml(f.duedate.split("-").reverse().join("/")) : null],
+    GROUP,
+    ["Created", f ? dated(f.created) : null],
+    ["Updated", f ? dated(f.updated) : null],
+    ["Delivered", custom(f, "deliveredAt") ? dated(custom(f, "deliveredAt")) : null],
+    ["Installed", custom(f, "installedAt") ? dated(custom(f, "installedAt")) : null],
+    ["Accepted", custom(f, "acceptedAt") ? dated(custom(f, "acceptedAt")) : null],
+  ].filter(fact => fact === GROUP || fact[1] != null);
+  const description = data
+    ? `<div class="rich">${data.renderedFields?.description ? sanitize(data.renderedFields.description) : `<span class="muted">No description.</span>`}</div>`
+    : `<p class="muted">${syncing ? "Loading…" : "Detail unavailable."}</p>`;
+  // Another issue: the detail starts from the top; a resync of the same issue keeps the reading position.
+  const sameTicket = state.renderedKey === key;
+  state.renderedKey = key;
+  const positions = sameTicket ? panelScrollers().map(el => el.scrollTop) : [];
+  $("panel-content").innerHTML =
+    `<div class="head"><h3>${escapeHtml(f?.summary ?? issue?.summary ?? key)}</h3>${factsHtml(facts)}</div>` +
+    `<div class="body"><h4 data-jump="description">Description</h4>${description}${f ? linksHtml(f) + attachmentsHtml(f) : ""}</div>` +
+    `<div class="comments">${data ? commentsHtml(data) + historyHtml(data) : ""}</div>`;
+  panelScrollers().forEach((el, index) => { el.scrollTop = positions[index] ?? 0; });
+  if (!sameTicket) $("panel-top").classList.remove("shown");
+  renderJump();
+}
+
+// Separator between two groups of fields: state, people, planning, dates.
+const GROUP = Symbol("group");
+
+function factsHtml(facts) {
+  const groups = [[]];
+  for (const fact of facts) {
+    if (fact === GROUP) groups.push([]);
+    else groups.at(-1).push(fact);
+  }
+  return groups.filter(group => group.length)
+    .map(group => `<dl class="facts">${group.map(([label, value]) => `<dt>${label}</dt><dd>${value}</dd>`).join("")}</dl>`)
+    .join("");
+}
+
+const dated = iso => `${formatDate(iso)} <span class="muted">(${relative(Date.parse(iso))})</span>`;
+
+// Sprints the issue went through, in order: a carried-over issue shows at a glance.
+// Jira Server returns them serialised ("…Sprint@1a2b[id=…,name=[ABC] Sprint 7,…]").
+function sprintsHtml(sprints) {
+  if (!sprints?.length) return null;
+  const names = sprints.map(s => typeof s === "string" ? /,name=(.*?),[a-zA-Z]+=/.exec(s)?.[1] : s.name).filter(Boolean);
+  if (!names.length) return null;
+  return names.map(name => `<span class="tag">${escapeHtml(name.replace(/^\[[^\]]*\]\s*/, ""))}</span>`).join(" → ") +
+    (names.length > 1 ? ` <span class="muted">(carried over ${names.length - 1} time${names.length > 2 ? "s" : ""})</span>` : "");
+}
+
+function linksHtml(f) {
+  const rows = [
+    ...(f.issuelinks ?? []).map(link => link.outwardIssue
+      ? { relation: link.type.outward, issue: link.outwardIssue }
+      : { relation: link.type.inward, issue: link.inwardIssue }),
+    ...(f.subtasks ?? []).map(issue => ({ relation: "subtask", issue })),
+  ].filter(row => row.issue);
+  if (!rows.length) return "";
+  return `<h4 data-jump="links" data-count="${rows.length}">Links (${rows.length})</h4><ul class="links">` + rows.map(({ relation, issue }) => {
+    const status = issue.fields?.status;
+    return `<li><span class="relation">${escapeHtml(relation)}</span>` +
+      (issue.fields?.issuetype ? icon({ url: issue.fields.issuetype.iconUrl, name: issue.fields.issuetype.name }) : "") +
+      `<a href="${browseUrl(issue.key)}" target="_blank" rel="noopener">${escapeHtml(issue.key)}</a>` +
+      `<span class="summary" title="${escapeHtml(issue.fields?.summary ?? "")}">${escapeHtml(issue.fields?.summary ?? "")}</span>` +
+      (status ? `<span class="status-pill ${escapeHtml(status.statusCategory?.key ?? "")}">${escapeHtml(status.name)}</span>` : "") +
+      `</li>`;
+  }).join("") + `</ul>`;
+}
+
+function attachmentsHtml(f) {
+  const files = f.attachment ?? [];
+  if (!files.length) return "";
+  return `<h4 data-jump="attachments" data-count="${files.length}">Attachments (${files.length})</h4><ul class="links">` + files.map(file =>
+    `<li><a href="${escapeHtml(relayed(file.content))}" target="_blank" rel="noopener"` +
+    (file.mimeType?.startsWith("image/") ? ` class="previewable" data-preview="${escapeHtml(relayed(file.content))}"` : "") +
+    `>${escapeHtml(file.filename)}</a>` +
+    `<span class="muted">${formatSize(file.size)} · ${escapeHtml(file.author?.displayName ?? "")} · ${formatDate(file.created)}</span></li>`
+  ).join("") + `</ul>`;
+}
+
+function formatSize(bytes) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function commentsHtml(data) {
+  const raw = data.fields.comment?.comments ?? [];
+  const rendered = data.renderedFields?.comment?.comments ?? [];
+  if (!raw.length) return `<h4 data-jump="comments">Comments</h4><p class="muted">No comments.</p>`;
+  // Newest first: it is the one people come to read.
+  const items = raw.map((c, i) => ({ author: c.author, created: c.created, body: rendered[i]?.body ?? escapeHtml(c.body) })).reverse();
+  return `<h4 data-jump="comments" data-count="${raw.length}">Comments (${raw.length})</h4>` + items.map(c =>
+    `<div class="comment"><div class="who">${person(c.author)}<span class="when">${formatDate(c.created)} · ${relative(Date.parse(c.created))}</span></div>` +
+    `<div class="rich">${sanitize(c.body)}</div></div>`
+  ).join("");
+}
+
+// History field names as Jira returns them (system id or custom field label).
+const HISTORY_FIELDS = {
+  status: "Status", assignee: "Assignee", reporter: "Reporter", resolution: "Resolution",
+  summary: "Summary", description: "Description", labels: "Labels", priority: "Priority",
+  issuetype: "Type", duedate: "Due date", "Fix Version": "Version", Component: "Component",
+  "Story Points": "Story points", "Epic Link": "Epic", Link: "Link", Attachment: "Attachment",
+  Rank: "Rank", Sprint: "Sprint", Comment: "Comment",
+};
+// Beyond this length, the old and new values (typically a description) are collapsed.
+const HISTORY_LONG_VALUE = 120;
+const HISTORY_BOT = /automat/i;
+
+function historyHtml(data) {
+  const histories = data.changelog?.histories;
+  if (!histories) return "";
+  if (!histories.length) return `<h4 data-jump="history">History</h4><p class="muted">No changes.</p>`;
+  // Newest first, like the comments.
+  return `<h4 data-jump="history" data-count="${histories.length}">History (${histories.length})</h4><ol class="history">` + [...histories].reverse().map(h =>
+    `<li class="${HISTORY_BOT.test(h.author?.displayName ?? "") ? "bot" : ""}">` +
+    `<div class="who">${person(h.author)}<span class="when" title="${escapeHtml(formatDate(h.created))}">${relative(Date.parse(h.created))}</span></div>` +
+    `<ul>${h.items.map(historyItemHtml).join("")}</ul></li>`
+  ).join("") + `</ol>`;
+}
+
+function historyItemHtml(item) {
+  const field = `<span class="field">${escapeHtml(HISTORY_FIELDS[item.field] ?? item.field)}</span>`;
+  const from = item.from ?? "";
+  const to = item.to ?? "";
+  if (from.length > HISTORY_LONG_VALUE || to.length > HISTORY_LONG_VALUE) {
+    return `<li>${field} <details><summary>changed</summary>` +
+      (from ? `<div class="old">${escapeHtml(from)}</div>` : "") +
+      (to ? `<div class="new">${escapeHtml(to)}</div>` : "") + `</details></li>`;
+  }
+  const change = !from ? `<span class="new">${escapeHtml(to)}</span>`
+    : !to ? `<del>${escapeHtml(from)}</del> <span class="muted">(removed)</span>`
+      : `<del>${escapeHtml(from)}</del> → <span class="new">${escapeHtml(to)}</span>`;
+  return `<li>${field} ${change}</li>`;
+}
+
+function person(user) {
+  if (!user?.name) return `<span class="muted">Unassigned</span>`;
+  return `${avatar(user.name, user.displayName, user.avatarUrls?.["48x48"])}${escapeHtml(user.displayName ?? user.name)}`;
+}
+
+function formatDate(iso) {
+  return new Date(iso).toLocaleString("en-GB", { dateStyle: "short", timeStyle: "short" });
+}
+
+// The HTML rendered by Jira is sanitised before insertion: no script, no event handler, no exotic URL
+// scheme; its images go through the authenticated relay.
+const DROPPED_ELEMENTS = "script,style,iframe,frame,object,embed,form,input,button,textarea,select,link,meta,base,svg,math";
+
+function sanitize(html) {
+  const doc = new DOMParser().parseFromString(`<body>${html}</body>`, "text/html");
+  doc.querySelectorAll(DROPPED_ELEMENTS).forEach(el => el.remove());
+  for (const el of doc.body.querySelectorAll("*")) {
+    for (const attribute of [...el.attributes]) {
+      const name = attribute.name.toLowerCase();
+      if (name.startsWith("on") || name === "srcset" || name === "formaction") {
+        el.removeAttribute(attribute.name);
+      } else if (name === "href" || name === "src") {
+        const url = safeUrl(attribute.value);
+        if (!url) el.removeAttribute(attribute.name);
+        else el.setAttribute(attribute.name, name === "src" ? relayed(url) : url);
+      }
+    }
+    if (el.tagName === "A") {
+      el.setAttribute("target", "_blank");
+      el.setAttribute("rel", "noopener noreferrer");
+    }
+    if (el.tagName === "IMG") el.setAttribute("loading", "lazy");
+  }
+  return doc.body.innerHTML;
+}
+
+function safeUrl(value) {
+  try {
+    const url = new URL(value, CONFIG.jiraWeb + "/");
+    return ["http:", "https:", "mailto:"].includes(url.protocol) ? url.href : null;
+  } catch (ignored) {
+    return null;
+  }
+}
+
+// Keyboard navigation in the panel: ↑ ↓ within the column, ← → to the neighbouring column.
+function moveSelection(key) {
+  const current = document.querySelector(`.card[data-key="${CSS.escape(state.openKey)}"]`);
+  if (!current) return;
+  let target = null;
+  if (key === "ArrowUp" || key === "ArrowDown") {
+    target = key === "ArrowUp" ? current.previousElementSibling : current.nextElementSibling;
+  } else {
+    const column = current.closest(".column");
+    const index = [...column.querySelectorAll(".card")].indexOf(current);
+    let next = key === "ArrowLeft" ? column.previousElementSibling : column.nextElementSibling;
+    while (next && !next.querySelector(".card")) next = key === "ArrowLeft" ? next.previousElementSibling : next.nextElementSibling;
+    const cards = next ? [...next.querySelectorAll(".card")] : [];
+    target = cards[Math.min(index, cards.length - 1)];
+  }
+  if (target?.classList.contains("card")) openDetail(target.dataset.key);
+}
+
+// ---------- URL ----------
+
+function writeUrl() {
+  const p = new URLSearchParams();
+  if (state.sprintId && state.sprintId !== state.defaultSprint) p.set("sprint", state.sprintId);
+  if (state.quick.size) p.set("qf", [...state.quick].join(","));
+  if (state.labels.size) p.set("lb", [...state.labels].join(","));
+  if (state.q) p.set("q", state.q);
+  const query = p.toString();
+  history.replaceState(null, "", query ? "?" + query : location.pathname);
+}
+
+// ---------- Events ----------
+
+document.addEventListener("click", e => {
+  if (e.target.closest("#clear-filters")) {
+    clearFilters();
+    return;
+  }
+  const viewButton = e.target.closest("[data-view]");
+  if (viewButton) {
+    setView(viewButton.dataset.view);
+    return;
+  }
+  const labelButton = e.target.closest("[data-label]");
+  if (labelButton) {
+    toggleLabel(labelButton.dataset.label);
+    return;
+  }
+  const quick = e.target.closest("[data-qf]");
+  if (quick) {
+    const id = Number(quick.dataset.qf);
+    if (!state.quick.delete(id)) {
+      // An issue has only one assignee: two "person" filters combined with AND would empty the board.
+      if (isPersonFilter(id)) for (const other of [...state.quick]) if (isPersonFilter(other)) state.quick.delete(other);
+      state.quick.add(id);
+    }
+    writeUrl();
+    renderFilters();
+    renderBoard();
+    return;
+  }
+  const cardEl = e.target.closest(".card");
+  // Ctrl / Cmd / Shift / middle click: native link behaviour, the issue opens in Jira.
+  if (cardEl && !(e.ctrlKey || e.metaKey || e.shiftKey || e.button !== 0)) {
+    e.preventDefault();
+    if (state.openKey === cardEl.dataset.key) closeDetail();
+    else openDetail(cardEl.dataset.key);
+  }
+});
+
+// ---------- Reordering cards ----------
+
+// Dragging a card within its column ranks it in Jira, before or after its neighbour. Dragging is handled by
+// hand (pointer events) rather than with native drag and drop: a dragged link only shows its URL there,
+// with no reserved slot and no cards moving aside. Changing columns would be a transition: the target
+// column gets a red outline and the card goes back to its place.
+const DRAG_THRESHOLD_PX = 5;
+const DRAG_ANIMATION_MS = 160;
+// Near the top or bottom edge of the board, it scrolls by itself, faster as the pointer gets closer.
+const AUTO_SCROLL_EDGE_PX = 60;
+const AUTO_SCROLL_MAX_PX = 18;
+const DRAG_REFUSED_HINT = "Moving to another column: not possible yet";
+let drag = null;
+let suppressClick = false;
+
+// The native link is no longer draggable: the card is what moves.
+document.addEventListener("dragstart", e => {
+  if (e.target.closest?.(".card")) e.preventDefault();
+});
+
+document.addEventListener("pointerdown", e => {
+  const card = e.target.closest(".card");
+  if (!card || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.pointerType !== "mouse") return;
+  drag = { card, key: card.dataset.key, x: e.clientX, y: e.clientY, started: false };
+});
+
+document.addEventListener("pointermove", e => {
+  if (!drag) return;
+  drag.pointer = { x: e.clientX, y: e.clientY };
+  if (!drag.started) {
+    if (Math.hypot(e.clientX - drag.x, e.clientY - drag.y) < DRAG_THRESHOLD_PX) return;
+    startDrag();
+  }
+  moveGhost();
+  followPointer();
+});
+
+document.addEventListener("pointerup", () => {
+  if (!drag) return;
+  if (drag.started) dropCard(false);
+  else drag = null;
+});
+
+document.addEventListener("pointercancel", () => drag?.started ? dropCard(true) : (drag = null));
+
+// A drag ends with a click on the card: it must not open the detail.
+document.addEventListener("click", e => {
+  if (!suppressClick) return;
+  suppressClick = false;
+  e.preventDefault();
+  e.stopImmediatePropagation();
+}, true);
+
+function startDrag() {
+  const { card } = drag;
+  const rect = card.getBoundingClientRect();
+  drag.started = true;
+  drag.cards = card.parentElement;
+  drag.home = card.nextElementSibling;
+  drag.offset = { x: drag.x - rect.left, y: drag.y - rect.top };
+  drag.ghost = card.cloneNode(true);
+  drag.ghost.classList.add("drag-ghost");
+  drag.ghost.classList.remove("selected");
+  drag.ghost.style.width = `${rect.width}px`;
+  drag.ghost.style.height = `${rect.height}px`;
+  document.body.append(drag.ghost);
+  // Lift: the card grows a little and tilts, for a beat.
+  drag.ghost.animate(
+    [{ transform: "rotate(0) scale(1)" }, { transform: "rotate(2deg) scale(1.03)" }],
+    { duration: DRAG_ANIMATION_MS, easing: "ease-out" }
+  );
+  card.classList.add("placeholder");
+  card.closest(".column").classList.add("drag-origin");
+  document.body.classList.add("card-dragging");
+  // The pressed button may have started selecting the card's text.
+  getSelection().removeAllRanges();
+  drag.scroller = document.querySelector("main");
+  drag.scrollFrame = requestAnimationFrame(autoScroll);
+}
+
+function moveGhost() {
+  const { ghost, pointer, offset } = drag;
+  ghost.style.left = `${pointer.x - offset.x}px`;
+  ghost.style.top = `${pointer.y - offset.y}px`;
+  ghost.style.transform = "rotate(2deg) scale(1.03)";
+}
+
+// The slot follows the pointer within the original column; elsewhere, it stays where it was.
+function followPointer() {
+  const under = document.elementFromPoint(drag.pointer.x, drag.pointer.y);
+  const cards = under?.closest(".column")?.querySelector(".cards");
+  document.querySelectorAll(".column.drag-refused").forEach(el => el.classList.remove("drag-refused"));
+  const refused = cards && cards !== drag.cards;
+  if (refused) cards.closest(".column").classList.add("drag-refused");
+  if (refused) drag.ghost.dataset.hint = DRAG_REFUSED_HINT;
+  else delete drag.ghost.dataset.hint;
+  if (cards !== drag.cards) return;
+  const slot = slotAt(drag.pointer);
+  if (slot === undefined) return;
+  movePlaceholder(slot);
+}
+
+// Card before which to put the slot (null: at the end of the column), based on the card nearest the
+// pointer: left / right when cards are side by side at its height, top / bottom otherwise.
+function slotAt(pointer) {
+  let nearest = null;
+  for (const card of drag.cards.querySelectorAll(".card:not(.placeholder)")) {
+    const r = card.getBoundingClientRect();
+    const dx = Math.max(r.left - pointer.x, 0, pointer.x - r.right);
+    const dy = Math.max(r.top - pointer.y, 0, pointer.y - r.bottom);
+    if (!nearest || dx * dx + dy * dy < nearest.distance) nearest = { card, r, distance: dx * dx + dy * dy };
+  }
+  if (!nearest) return undefined;
+  const { card, r } = nearest;
+  const sideBySide = getComputedStyle(drag.cards).gridTemplateColumns.split(" ").length > 1 && pointer.y >= r.top && pointer.y <= r.bottom;
+  const before = sideBySide ? pointer.x < r.left + r.width / 2 : pointer.y < r.top + r.height / 2;
+  return before ? card : card.nextElementSibling;
+}
+
+// Moves the slot, and slides the cards it pushes aside from their former position (FLIP).
+function movePlaceholder(before) {
+  const { card: placeholder, cards } = drag;
+  if (before === placeholder || placeholder.nextElementSibling === before) return;
+  const others = [...cards.children].filter(el => el !== placeholder);
+  const first = new Map(others.map(el => [el, el.getBoundingClientRect()]));
+  cards.insertBefore(placeholder, before);
+  for (const el of others) {
+    const from = first.get(el);
+    const to = el.getBoundingClientRect();
+    const dx = from.left - to.left;
+    const dy = from.top - to.top;
+    if (dx || dy) {
+      el.animate(
+        [{ transform: `translate(${dx}px, ${dy}px)` }, { transform: "none" }],
+        { duration: DRAG_ANIMATION_MS, easing: "ease-out" }
+      );
+    }
+  }
+}
+
+function autoScroll() {
+  if (!drag?.started) return;
+  const r = drag.scroller.getBoundingClientRect();
+  const { y } = drag.pointer ?? drag;
+  const speed = edge => Math.ceil(AUTO_SCROLL_MAX_PX * (1 - edge / AUTO_SCROLL_EDGE_PX));
+  const step = y < r.top + AUTO_SCROLL_EDGE_PX ? -speed(Math.max(0, y - r.top))
+    : y > r.bottom - AUTO_SCROLL_EDGE_PX ? speed(Math.max(0, r.bottom - y)) : 0;
+  if (step) {
+    drag.scroller.scrollTop += step;
+    followPointer();
+  }
+  drag.scrollFrame = requestAnimationFrame(autoScroll);
+}
+
+// Drop: the card slides into its place, then the rank is sent to Jira if the place changed.
+// Escape or a drop outside the column: it goes back where it came from.
+function dropCard(cancelled) {
+  const current = drag;
+  drag = null;
+  suppressClick = true;
+  setTimeout(() => { suppressClick = false; });
+  cancelAnimationFrame(current.scrollFrame);
+  const { card, ghost, cards } = current;
+  const refused = document.querySelector(".column.drag-refused");
+  if (cancelled || refused) cards.insertBefore(card, current.home);
+  const moved = card.nextElementSibling !== current.home;
+  const target = card.getBoundingClientRect();
+  const from = ghost.getBoundingClientRect();
+  const landing = ghost.animate(
+    [
+      { transform: "rotate(2deg) scale(1.03)" },
+      { transform: `translate(${target.left - from.left - (from.width - target.width) / 2}px, ${target.top - from.top - (from.height - target.height) / 2}px)` },
+    ],
+    { duration: DRAG_ANIMATION_MS, easing: "ease-in-out", fill: "forwards" }
+  );
+  landing.finished.catch(() => null).then(() => {
+    ghost.remove();
+    card.classList.remove("placeholder");
+    document.querySelectorAll(".drag-origin, .drag-refused").forEach(el => el.classList.remove("drag-origin", "drag-refused"));
+    document.body.classList.remove("card-dragging");
+    if (moved) {
+      const previous = card.previousElementSibling?.dataset.key;
+      const next = card.nextElementSibling?.dataset.key;
+      rankIssue(
+        current.key,
+        next ? { before: next } : { after: previous }
+      );
+    } else if (state.renderLater) {
+      renderBoard();
+    }
+  });
+}
+
+// The card moves right away; if Jira refuses, it moves back and a message says why.
+async function rankIssue(
+  key,
+  neighbour
+) {
+  const board = currentBoard();
+  const previous = board.issues.slice();
+  const issue = board.issues.find(i => i.key === key);
+  board.issues.splice(board.issues.indexOf(issue), 1);
+  const at = board.issues.findIndex(i => i.key === (neighbour.before ?? neighbour.after));
+  board.issues.splice(neighbour.before ? at : at + 1, 0, issue);
+  renderBoard();
+  try {
+    const response = await fetch("/rank", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ issue: key, ...neighbour }),
+    });
+    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || response.statusText);
+    saveSnapshot();
+  } catch (error) {
+    board.issues = previous;
+    if (currentBoard() === board) renderBoard();
+    flashError(`${key} could not be moved: ${error.message}`);
+  }
+}
+
+function flashError(message) {
+  const banner = document.createElement("div");
+  banner.className = "error-banner";
+  banner.textContent = message;
+  $("errors").append(banner);
+  setTimeout(() => banner.remove(), 8000);
+}
+
+let hoverTimer = null;
+document.addEventListener("mouseover", e => {
+  const cardEl = e.target.closest(".card");
+  clearTimeout(hoverTimer);
+  if (cardEl) hoverTimer = setTimeout(() => prefetchLocal(cardEl.dataset.key), HOVER_PREFETCH_MS);
+});
+
+document.addEventListener("input", e => {
+  if (e.target.id !== "q") return;
+  state.q = e.target.value;
+  writeUrl();
+  renderBoard();
+});
+
+document.addEventListener("keydown", e => {
+  if (e.key === "Escape" && drag?.started) {
+    dropCard(true);
+    return;
+  }
+  if (e.key === "Escape" && !$("load-panel").hidden) {
+    toggleLoadPanel(false);
+    return;
+  }
+  const typing = e.target.matches?.("input, select, textarea");
+  if (e.key === "Escape") {
+    if (typing && e.target.id === "q" && state.q) return;
+    if (!$("panel").hidden) closeDetail();
+    else if (typing) e.target.blur();
+    return;
+  }
+  if (typing) return;
+  if (e.key === "/") {
+    e.preventDefault();
+    $("q")?.focus();
+  } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "d") {
+    toggleDock();
+  } else if (!e.ctrlKey && !e.metaKey && !e.altKey && VIEWS.some(v => v.key === e.key)) {
+    setView(VIEWS.find(v => v.key === e.key).id);
+  } else if (state.openKey && e.key === "Enter" && !e.target.closest?.("button, a:not(.card)")) {
+    // Open preview: Enter goes deeper, the selected issue opens in full in Jira (new tab).
+    e.preventDefault();
+    window.open(browseUrl(state.openKey), "_blank", "noopener");
+  } else if (state.openKey && ["ArrowUp", "ArrowDown", "ArrowLeft", "ArrowRight"].includes(e.key)) {
+    e.preventDefault();
+    moveSelection(e.key);
+  }
+});
+
+document.addEventListener("change", e => {
+  if (e.target.id === "more-labels" && e.target.value) toggleLabel(e.target.value);
+});
+
+$("sprint").addEventListener("change", e => {
+  state.sprintId = Number(e.target.value);
+  writeUrl();
+  closeDetail();
+  render();
+  if (!currentBoard() || age() >= STALE_ON_FOCUS_MS) sharedRefresh({ olderThan: STALE_ON_FOCUS_MS });
+  else scheduleAutoRefresh();
+});
+$("refresh").addEventListener("click", () => refresh());
+$("autoRefresh").addEventListener("change", e => {
+  state.autoRefresh = e.target.checked;
+  savePreference(
+    AUTO_REFRESH_KEY,
+    String(state.autoRefresh)
+  );
+  scheduleAutoRefresh();
+});
+$("theme").addEventListener("click", () => {
+  const light = document.documentElement.dataset.theme !== "light";
+  if (light) document.documentElement.dataset.theme = "light";
+  else delete document.documentElement.dataset.theme;
+  savePreference(
+    THEME_KEY,
+    light ? "light" : "dark"
+  );
+  renderThemeButton();
+});
+
+function renderThemeButton() {
+  const light = document.documentElement.dataset.theme === "light";
+  $("theme").textContent = light ? "☾" : "☀";
+  $("theme").title = light ? "Switch to the dark theme" : "Switch to the light theme";
+}
+$("panel-close").addEventListener("click", closeDetail);
+// At the bottom, each detail column scrolls on its own: scrolling is captured on all of them.
+const panelScrollers = () => [$("panel-content"), ...$("panel-content").children];
+$("panel-content").addEventListener("scroll", () => {
+  $("panel-top").classList.toggle("shown", panelScrollers().some(el => el.scrollTop > el.clientHeight * 0.6));
+}, { passive: true, capture: true });
+$("panel-top").addEventListener("click", () => {
+  for (const el of panelScrollers()) el.scrollTo({ top: 0, behavior: "smooth" });
+});
+
+// Detail table of contents: the sections present in the displayed issue, with their number of entries.
+const JUMP_SECTIONS = [
+  ["description", "Description"],
+  ["links", "Links"],
+  ["attachments", "Attachments"],
+  ["comments", "Comments"],
+  ["history", "History"],
+];
+
+function renderJump() {
+  const content = $("panel-content");
+  $("panel-sections").innerHTML = JUMP_SECTIONS
+    .map(([id, label]) => [id, label, content.querySelector(`[data-jump="${id}"]`)])
+    .filter(([, , heading]) => heading)
+    .map(([id, label, heading]) => `<button type="button" data-target="${id}">${label}` +
+      (heading.dataset.count ? ` <span class="count">${heading.dataset.count}</span>` : "") + `</button>`)
+    .join("");
+}
+
+// Scrolls the column holding the section (at the bottom, each one scrolls alone; on the side, the whole detail).
+function jumpTo(id) {
+  const content = $("panel-content");
+  const heading = content.querySelector(`[data-jump="${id}"]`);
+  if (!heading) return;
+  const scroller = [...content.children].find(el => el.contains(heading) && getComputedStyle(el).overflowY === "auto") ?? content;
+  const top = heading.getBoundingClientRect().top - scroller.getBoundingClientRect().top + scroller.scrollTop - 12;
+  scroller.scrollTo({ top, behavior: "smooth" });
+}
+
+// Preview of attached images: shown after a short hover delay (a quick pass loads nothing), placed on the
+// side of the screen with the most room, and following the mouse.
+const PREVIEW_DELAY_MS = 150;
+const PREVIEW_GAP_PX = 18;
+// Displayed size: twice the natural size, within the screen (aspect ratio kept).
+const PREVIEW_SCALE = 2;
+const PREVIEW_MAX_WIDTH = 0.9;
+const PREVIEW_MAX_HEIGHT = 0.88;
+let previewTimer = 0;
+let previewPointer = { x: 0, y: 0 };
+
+function placePreview() {
+  const box = $("preview");
+  const { width, height } = box.getBoundingClientRect();
+  const { x, y } = previewPointer;
+  const left = x > innerWidth / 2 ? x - PREVIEW_GAP_PX - width : x + PREVIEW_GAP_PX;
+  const top = Math.min(Math.max(8, y - height / 2), innerHeight - height - 8);
+  box.style.left = `${Math.max(8, Math.min(left, innerWidth - width - 8))}px`;
+  box.style.top = `${Math.max(8, top)}px`;
+}
+
+function showPreview(url) {
+  const box = $("preview");
+  const img = box.querySelector("img");
+  box.classList.add("loading");
+  img.onload = () => {
+    sizePreview(img);
+    box.classList.remove("loading");
+    placePreview();
+  };
+  img.onerror = () => { box.hidden = true; };
+  img.src = url;
+  box.hidden = false;
+  if (img.complete && img.naturalWidth) {
+    sizePreview(img);
+    box.classList.remove("loading");
+  }
+  placePreview();
+}
+
+function sizePreview(img) {
+  const ratio = Math.min(
+    PREVIEW_SCALE,
+    innerWidth * PREVIEW_MAX_WIDTH / img.naturalWidth,
+    innerHeight * PREVIEW_MAX_HEIGHT / img.naturalHeight
+  );
+  img.style.width = `${Math.round(img.naturalWidth * ratio)}px`;
+  img.style.height = `${Math.round(img.naturalHeight * ratio)}px`;
+}
+
+function hidePreview() {
+  clearTimeout(previewTimer);
+  $("preview").hidden = true;
+}
+
+$("panel-content").addEventListener("mouseover", event => {
+  const link = event.target.closest("a[data-preview]");
+  if (!link || link.contains(event.relatedTarget)) return;
+  previewPointer = { x: event.clientX, y: event.clientY };
+  clearTimeout(previewTimer);
+  previewTimer = setTimeout(() => showPreview(link.dataset.preview), PREVIEW_DELAY_MS);
+});
+$("panel-content").addEventListener("mousemove", event => {
+  if (!event.target.closest("a[data-preview]")) return;
+  previewPointer = { x: event.clientX, y: event.clientY };
+  if (!$("preview").hidden) placePreview();
+}, { passive: true });
+$("panel-content").addEventListener("mouseout", event => {
+  const link = event.target.closest("a[data-preview]");
+  if (link && !link.contains(event.relatedTarget)) hidePreview();
+});
+$("panel-content").addEventListener("scroll", hidePreview, { passive: true, capture: true });
+
+$("panel-sections").addEventListener("click", event => {
+  const target = event.target.closest("button[data-target]")?.dataset.target;
+  if (target) jumpTo(target);
+});
+
+function applyDock() {
+  const bottom = state.dock === "bottom";
+  const panel = $("panel");
+  panel.classList.toggle("bottom", bottom);
+  if (bottom) panel.classList.remove("left");
+  const height = Number(readPreference(PANEL_HEIGHT_KEY));
+  if (height) panel.style.setProperty("--panel-height", `${height * 100}vh`);
+  $("panel-dock").textContent = bottom ? "◨" : "⬓";
+  $("panel-dock").title = bottom ? "Show the detail on the side (D key)" : "Show the detail at the bottom, full width (D key)";
+}
+
+function toggleDock() {
+  state.dock = state.dock === "bottom" ? "side" : "bottom";
+  savePreference(
+    DOCK_KEY,
+    state.dock
+  );
+  applyDock();
+  if (state.openKey) openDetail(state.openKey);
+}
+
+$("panel-dock").addEventListener("click", toggleDock);
+$("panel-grip").addEventListener("pointerdown", e => {
+  e.preventDefault();
+  const grip = e.currentTarget;
+  grip.setPointerCapture(e.pointerId);
+  document.body.classList.add("resizing");
+  let ratio = null;
+  const move = event => {
+    ratio = Math.min(PANEL_MAX_HEIGHT, Math.max(PANEL_MIN_HEIGHT, (window.innerHeight - event.clientY) / window.innerHeight));
+    $("panel").style.setProperty("--panel-height", `${ratio * 100}vh`);
+  };
+  const stop = () => {
+    grip.removeEventListener("pointermove", move);
+    document.body.classList.remove("resizing");
+    if (ratio) savePreference(
+      PANEL_HEIGHT_KEY,
+      ratio.toFixed(3)
+    );
+  };
+  grip.addEventListener("pointermove", move);
+  grip.addEventListener("pointerup", stop, { once: true });
+  grip.addEventListener("pointercancel", stop, { once: true });
+});
+applyDock();
+
+document.addEventListener("visibilitychange", () => {
+  if (document.hidden || !state.autoRefresh) scheduleAutoRefresh();
+  else sharedRefresh({ olderThan: STALE_ON_FOCUS_MS });
+});
+// Only fired in the other tabs: the one that saved already shows this data.
+window.addEventListener("storage", e => {
+  if (e.key === SNAPSHOT_KEY) adoptNewerSnapshot();
+});
+setInterval(renderStatus, 15 * 1000);
+setInterval(refreshLoad, LOAD_REFRESH_MS);
+setInterval(reloadOpenDetail, DETAIL_POLL_MS);
+$("panel-sync").addEventListener("click", e => {
+  if (e.target.closest(".resync") && state.openKey) syncDetail(
+    state.openKey,
+    "force"
+  );
+});
+
+// Saved data: shown right away, then refreshed behind the scenes if it has aged.
+renderThemeButton();
+$("autoRefresh").checked = state.autoRefresh;
+$("auto-refresh-label").title = `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`;
+adoptNewerSnapshot();
+render();
+sharedRefresh({ olderThan: STALE_ON_FOCUS_MS });
+refreshLoad();
+</script>
+</body>
+</html>
