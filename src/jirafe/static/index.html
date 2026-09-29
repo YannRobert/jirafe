@@ -364,19 +364,29 @@ try {
     border-radius: 2px; background: var(--border);
   }
   aside.bottom .grip:hover::after, body.resizing aside .grip::after { background: var(--accent); }
+  /* Maximized: the detail covers the whole page, over the board, whatever the dock; leaving it gives back
+     the side or bottom panel as it was. */
+  aside.maximized {
+    position: fixed; inset: 0; z-index: 20; width: auto; height: auto; border: 0; box-shadow: none;
+  }
+  aside.maximized .grip { display: none; }
+  aside .bar .icon-btn svg {
+    display: block; width: 1.1rem; height: 1.1rem; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
   body.resizing { cursor: row-resize; user-select: none; }
-  /* At the bottom, full width: three columns that each scroll on their own — the fields, the description
+  /* At the bottom, full width (or maximized): three columns that each scroll on their own — the fields, the description
      (and its links), the comments — in lines of readable length rather than spread across the screen.
      Description and comments are read side by side. */
   @media (min-width: 70rem) {
-    aside.bottom .content {
+    aside:is(.bottom, .maximized) .content {
       display: grid; grid-template-columns: minmax(22rem, 28rem) minmax(0, 1.25fr) minmax(0, 1fr);
       padding: 0; overflow: hidden;
     }
-    aside.bottom .content > * { min-height: 0; overflow: auto; padding: 1rem 1.4rem 4.5rem; }
-    aside.bottom .content > * + * { border-left: 1px solid var(--border); }
-    aside.bottom .content > * > h4:first-child { margin-top: 0; }
-    aside.bottom h3 { font-size: 1.15rem; margin-bottom: 0.6rem; }
+    aside:is(.bottom, .maximized) .content > * { min-height: 0; overflow: auto; padding: 1rem 1.4rem 4.5rem; }
+    aside:is(.bottom, .maximized) .content > * + * { border-left: 1px solid var(--border); }
+    aside:is(.bottom, .maximized) .content > * > h4:first-child { margin-top: 0; }
+    aside:is(.bottom, .maximized) h3 { font-size: 1.15rem; margin-bottom: 0.6rem; }
   }
   aside .bar { flex: none; display: flex; align-items: center; gap: 0.6rem; padding: 0.7rem 1rem; border-bottom: 1px solid var(--border); }
   aside .bar .key { font-weight: 600; }
@@ -550,10 +560,11 @@ try {
   <div class="grip" id="panel-grip" title="Drag to resize"></div>
   <div class="bar">
     <a class="key" id="panel-key" target="_blank" rel="noopener"></a>
-    <span class="nav">↑ ↓ ← → navigate · Enter open in Jira · D side/bottom · Esc close</span>
+    <span class="nav">↑ ↓ ← → navigate · Enter open in Jira · D side/bottom · M maximize · Esc close</span>
     <span class="spacer"></span>
     <span class="sync" id="panel-sync"></span>
     <button type="button" class="icon-btn" id="panel-dock"></button>
+    <button type="button" class="icon-btn" id="panel-max"></button>
     <button type="button" class="btn" id="panel-close">Close</button>
   </div>
   <div class="content" id="panel-content"></div>
@@ -663,6 +674,8 @@ const state = {
   assigning: new Set(),
   autoRefresh: readPreference(AUTO_REFRESH_KEY) !== "false",
   dock: readPreference(DOCK_KEY) === "bottom" ? "bottom" : "side",
+  // Not remembered across reloads: a maximized detail hides the board the page opens on.
+  maximized: false,
   view: VIEWS.some(v => v.id === readPreference(VIEW_KEY)) ? readPreference(VIEW_KEY) : VIEWS[0]?.id ?? "all",
 };
 
@@ -2650,6 +2663,8 @@ document.addEventListener("keydown", e => {
     $("q")?.focus();
   } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "d") {
     toggleDock();
+  } else if (state.openKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") {
+    toggleMaximized();
   } else if (state.openKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "a") {
     e.preventDefault();
     openPicker();
@@ -2871,6 +2886,27 @@ function toggleDock() {
 }
 
 $("panel-dock").addEventListener("click", toggleDock);
+
+const MAXIMIZE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9V4h5M20 9V4h-5M4 15v5h5M20 15v5h-5"/></svg>`;
+const RESTORE_ICON = `<svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 4v5H4M15 4v5h5M9 20v-5H4M15 20v-5h5"/></svg>`;
+
+function applyMaximized() {
+  const { maximized } = state;
+  $("panel").classList.toggle("maximized", maximized);
+  $("panel-max").innerHTML = maximized ? RESTORE_ICON : MAXIMIZE_ICON;
+  const label = maximized ? "Back to the previous size (M key)" : "Show the detail on the whole page (M key)";
+  // Icon only: the label is also its accessible name, which the tooltip would otherwise leave stale.
+  $("panel-max").title = label;
+  $("panel-max").setAttribute("aria-label", label);
+}
+
+function toggleMaximized() {
+  state.maximized = !state.maximized;
+  applyMaximized();
+}
+
+$("panel-max").addEventListener("click", toggleMaximized);
+applyMaximized();
 $("panel-grip").addEventListener("pointerdown", e => {
   e.preventDefault();
   const grip = e.currentTarget;
