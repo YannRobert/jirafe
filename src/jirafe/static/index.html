@@ -413,6 +413,14 @@ try {
   aside .to-top:hover { background: var(--accent); color: var(--accent-fg); }
   /* Preview of an attached image when hovering its name: no click, no new tab. */
   aside a.previewable::after { content: " 🖼"; font-size: 0.8em; opacity: 0.7; }
+  /* Tooltips drawn by the page: the browser's own (title) are small and cannot be styled. The font size is
+     set per element, in JS. */
+  .tooltip {
+    position: fixed; z-index: 2000; max-width: min(28rem, calc(100vw - 16px)); padding: 0.3em 0.6em;
+    border-radius: 4px; line-height: 1.35; white-space: pre-line; pointer-events: none;
+    color: var(--text); background: var(--card); border: 1px solid var(--border); box-shadow: 0 4px 14px rgba(0, 0, 0, .35);
+  }
+  .tooltip[hidden] { display: none; }
   .preview {
     position: fixed; z-index: 50; pointer-events: none; padding: 0.35rem; border-radius: 6px;
     background: var(--card); border: 1px solid var(--border); box-shadow: 0 8px 28px rgba(0, 0, 0, 0.45);
@@ -551,6 +559,7 @@ try {
   </nav>
 </aside>
 
+<div class="tooltip" id="tooltip" role="tooltip" hidden></div>
 <div class="preview" id="preview" hidden><img alt=""><span class="loading">Loading…</span></div>
 
 <script id="config" type="application/json">__CONFIG__</script>
@@ -1943,6 +1952,68 @@ document.addEventListener("click", e => {
     else openDetail(cardEl.dataset.key);
   }
 });
+
+// ---------- Tooltips ----------
+
+// Every title is shown by the page instead of the browser. On first hover it moves to data-title, which
+// silences the native tooltip; a title set again later by the code is picked up at the next hover.
+const TOOLTIP_DELAY_MS = 500;
+const TOOLTIP_GAP_PX = 8;
+// Native tooltips are about 12px: 20% larger, but never larger than the text of the element they describe.
+const TOOLTIP_MAX_FONT_PX = 14.4;
+// Elements without text of their own (their initials are only a stand-in): the size of the surrounding text.
+const TOOLTIP_TEXTLESS = "img, svg, .avatar, .icon, .grip";
+let tooltipTimer = 0;
+let tooltipTarget = null;
+
+document.addEventListener("mouseover", e => {
+  const target = e.target.closest?.("[title], [data-title]");
+  if (target === tooltipTarget) return;
+  hideTooltip();
+  if (!target || drag?.started) return;
+  if (target.hasAttribute("title")) {
+    target.dataset.title = target.getAttribute("title");
+    target.removeAttribute("title");
+    // The title was the accessible name of icon-only buttons: it stays one.
+    if (!target.hasAttribute("aria-label") && !target.textContent.trim() && target.tagName !== "IMG") {
+      target.setAttribute("aria-label", target.dataset.title);
+    }
+  }
+  if (!target.dataset.title) return;
+  tooltipTarget = target;
+  tooltipTimer = setTimeout(showTooltip, TOOLTIP_DELAY_MS);
+});
+document.addEventListener("mouseout", e => {
+  if (!e.relatedTarget) hideTooltip();
+});
+for (const type of ["mousedown", "keydown", "wheel"]) document.addEventListener(type, hideTooltip, { passive: true });
+document.addEventListener("scroll", hideTooltip, { passive: true, capture: true });
+
+function showTooltip() {
+  const target = tooltipTarget;
+  if (!target?.isConnected || drag?.started) return;
+  const tip = $("tooltip");
+  const reference = target.matches(TOOLTIP_TEXTLESS) ? target.parentElement : target;
+  tip.style.fontSize = `${Math.min(TOOLTIP_MAX_FONT_PX, parseFloat(getComputedStyle(reference).fontSize))}px`;
+  tip.textContent = target.dataset.title;
+  tip.hidden = false;
+  const box = target.getBoundingClientRect();
+  const viewport = document.documentElement;
+  const left = Math.min(
+    Math.max(TOOLTIP_GAP_PX, box.left + box.width / 2 - tip.offsetWidth / 2),
+    viewport.clientWidth - tip.offsetWidth - TOOLTIP_GAP_PX
+  );
+  const below = box.bottom + TOOLTIP_GAP_PX;
+  const top = below + tip.offsetHeight <= viewport.clientHeight ? below : box.top - TOOLTIP_GAP_PX - tip.offsetHeight;
+  tip.style.left = `${left}px`;
+  tip.style.top = `${Math.max(TOOLTIP_GAP_PX, top)}px`;
+}
+
+function hideTooltip() {
+  clearTimeout(tooltipTimer);
+  tooltipTarget = null;
+  $("tooltip").hidden = true;
+}
 
 // ---------- Reordering cards ----------
 
