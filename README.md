@@ -17,6 +17,10 @@ already move issues by dragging a card by its grip (⠿): within its column to r
 column to change its status (only columns a Jira transition leads to accept it). It can also change an
 issue's assignee from the detail panel (click the assignee, or press `A`).
 
+**Sharing a list of issues.** `Ctrl+C` copies the open issue, or the cards picked with Ctrl + click
+(Cmd + click on a Mac) or Shift + click (a range), one line per issue (key and summary; with a link to
+Jira when pasted into a mail or a chat).
+
 ## Requirements
 
 - **Python 3.8+** (nothing to install).
