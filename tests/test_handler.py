@@ -188,7 +188,7 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(json.loads(body)["message"], "Issue not on the board")
 
     def test_unknown_write_route(self):
-        self.assertEqual(self.put("/transition", {"issue": "ABC-1"})[0], 404)
+        self.assertEqual(self.put("/status", {"issue": "ABC-1"})[0], 404)
         self.assertEqual(self.upstream.requests, [])
 
     def test_assignee_refuses_other_origin(self):
@@ -244,6 +244,70 @@ class HandlerTest(unittest.TestCase):
         status, body = self.assign({"issue": "ABC-1", "assignee": "alice"})
         self.assertEqual(status, 409)
         self.assertEqual(json.loads(body)["message"], "User cannot be assigned")
+
+    def test_transitions_read_for_one_valid_key(self):
+        for path in ("/transitions/abc-1", "/transitions/ABC-1/../../myself", "/transitions/ABC-1?x=1"):
+            with self.subTest(path):
+                self.assertEqual(self.call("GET", path)[0], 400)
+        self.assertEqual(self.upstream.requests, [])
+        status, _ = self.call("GET", "/transitions/ABC-1")
+        self.assertEqual(status, 200)
+        request, = self.upstream.requests
+        self.assertEqual(
+            request["url"],
+            f"{JIRA}/rest/api/2/issue/ABC-1/transitions"
+        )
+
+    def test_transition_refuses_other_origin(self):
+        status, _ = self.put(
+            "/transition",
+            {"issue": "ABC-1", "transition": "31"},
+            origin="https://attacker.example"
+        )
+        self.assertEqual(status, 403)
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_transition_refuses_invalid_body(self):
+        invalid = (
+            {"issue": "ABC-1"},
+            {"issue": "abc-1", "transition": "31"},
+            {"issue": "ABC-1", "transition": 31},
+            {"issue": "ABC-1", "transition": "31&x=1"},
+            {"issue": "ABC-1", "transition": {"id": "31"}},
+            {"issue": "ABC-1", "transition": "1" * 11},
+        )
+        for payload in invalid:
+            with self.subTest(payload):
+                self.assertEqual(self.put("/transition", payload)[0], 400)
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_transition_builds_body_sent_to_jira(self):
+        self.upstream.response = (204, b"", {})
+        status, body = self.put(
+            "/transition",
+            {"issue": "ABC-1", "transition": "31", "fields": {"resolution": "Done"}}
+        )
+        self.assertEqual(status, 200)
+        answer = json.loads(body)
+        self.assertEqual(answer["transitioned"], "ABC-1")
+        self.assertEqual(answer["issue"]["key"], "ABC-1")
+        request, = self.upstream.requests
+        self.assertEqual(request["method"], "POST")
+        self.assertEqual(
+            request["url"],
+            f"{JIRA}/rest/api/2/issue/ABC-1/transitions"
+        )
+        # Nothing but the transition id reaches Jira: fields sent by the page are ignored.
+        self.assertEqual(
+            json.loads(request["body"]),
+            {"transition": {"id": "31"}}
+        )
+
+    def test_transition_reports_jira_refusal(self):
+        self.upstream.response = (400, b'{"errorMessages": ["Transition 31 is not valid"], "errors": {}}', {})
+        status, body = self.put("/transition", {"issue": "ABC-1", "transition": "31"})
+        self.assertEqual(status, 409)
+        self.assertEqual(json.loads(body)["message"], "Transition 31 is not valid")
 
     def test_issue(self):
         self.assertEqual(self.call("GET", "/issue/not-a-key")[0], 400)

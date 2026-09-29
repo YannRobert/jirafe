@@ -67,6 +67,8 @@ CONFIG_PLACEHOLDER = b"__CONFIG__"
 ISSUE_FRESH_S = 30
 RANK_PATH = "rest/agile/1.0/issue/rank"
 ASSIGNEE_PATH = "rest/api/2/issue/{key}/assignee"
+TRANSITIONS_PATH = "rest/api/2/issue/{key}/transitions"
+TRANSITION_ID = re.compile(r"^[0-9]{1,10}$")
 # Jira Server / Data Center login: letters (accented included), digits and the usual separators. Kept
 # narrow on purpose: whatever the page sends, only something shaped like a login reaches a Jira write.
 USER_LOGIN = re.compile(r"^[\w.@+'-]{1,255}$")

@@ -283,6 +283,10 @@ try {
   }
   .column.drag-origin { background: color-mix(in srgb, var(--accent) 7%, var(--column)); }
   .column.drag-refused { outline: 2px dashed var(--red); outline-offset: -2px; }
+  .column.drag-target { outline: 2px dashed var(--accent); outline-offset: -2px; }
+  .drag-ghost[data-hint-kind="info"]::after { background: var(--chip); color: var(--text); }
+  /* The slot stands in for the "—" of an empty column it enters. */
+  .cards:has(> .card) > .empty-col { display: none; }
   .card.selected { background: var(--selected); outline: 2px solid var(--accent); outline-offset: -2px; }
   .card .top { display: flex; justify-content: space-between; align-items: flex-start; gap: 0.4rem; }
   .card .key { color: var(--muted); font-size: 0.8rem; }
@@ -2017,16 +2021,17 @@ function hideTooltip() {
 
 // ---------- Reordering cards ----------
 
-// Dragging a card within its column ranks it in Jira, before or after its neighbour. Dragging is handled by
-// hand (pointer events) rather than with native drag and drop: a dragged link only shows its URL there,
-// with no reserved slot and no cards moving aside. Changing columns would be a transition: the target
-// column gets a red outline and the card goes back to its place.
+// Dragging a card within its column ranks it in Jira, before or after its neighbour. Dragging it to another
+// column applies the Jira transition leading to one of that column's statuses, then ranks it where it was
+// dropped. Dragging is handled by hand (pointer events) rather than with native drag and drop: a dragged
+// link only shows its URL there, with no reserved slot and no cards moving aside.
+// The transitions available from the card's status are only asked of Jira once the card leaves its column:
+// a column with none leading to it gets a red outline, and a card dropped there goes back to its place.
 const DRAG_THRESHOLD_PX = 5;
 const DRAG_ANIMATION_MS = 160;
 // Near the top or bottom edge of the board, it scrolls by itself, faster as the pointer gets closer.
 const AUTO_SCROLL_EDGE_PX = 60;
 const AUTO_SCROLL_MAX_PX = 18;
-const DRAG_REFUSED_HINT = "Moving to another column: not possible yet";
 let drag = null;
 let suppressClick = false;
 
@@ -2078,6 +2083,7 @@ function startDrag() {
   const rect = card.getBoundingClientRect();
   drag.started = true;
   drag.cards = card.parentElement;
+  drag.origin = card.closest(".column");
   drag.home = card.nextElementSibling;
   drag.offset = { x: drag.x - rect.left, y: drag.y - rect.top };
   drag.ghost = card.cloneNode(true);
@@ -2107,26 +2113,81 @@ function moveGhost() {
   ghost.style.transform = "rotate(2deg) scale(1.03)";
 }
 
-// The slot follows the pointer within the original column; elsewhere, it stays where it was.
+// The slot follows the pointer, in the original column or in one a transition leads to (or might, while
+// Jira has not answered yet); over a refused column, it stays where it was.
 function followPointer() {
   const under = document.elementFromPoint(drag.pointer.x, drag.pointer.y);
-  const cards = under?.closest(".column")?.querySelector(".cards");
-  document.querySelectorAll(".column.drag-refused").forEach(el => el.classList.remove("drag-refused"));
-  const refused = cards && cards !== drag.cards;
-  if (refused) cards.closest(".column").classList.add("drag-refused");
-  if (refused) drag.ghost.dataset.hint = DRAG_REFUSED_HINT;
-  else delete drag.ghost.dataset.hint;
-  if (cards !== drag.cards) return;
-  const slot = slotAt(drag.pointer);
-  if (slot === undefined) return;
-  movePlaceholder(slot);
+  const column = under?.closest(".column");
+  document.querySelectorAll(".column.drag-refused, .column.drag-target").forEach(el => el.classList.remove("drag-refused", "drag-target"));
+  delete drag.ghost.dataset.hint;
+  delete drag.ghost.dataset.hintKind;
+  if (!column) return;
+  if (column !== drag.origin) {
+    const verdict = columnVerdict(column);
+    column.classList.add(verdict.refused ? "drag-refused" : "drag-target");
+    drag.ghost.dataset.hint = verdict.hint;
+    if (!verdict.refused) drag.ghost.dataset.hintKind = "info";
+    if (verdict.refused) return;
+  }
+  const cards = column.querySelector(".cards");
+  movePlaceholder(
+    slotAt(drag.pointer, cards) ?? null,
+    cards
+  );
+}
+
+// Several statuses may share a column: the first one a transition leads to, in the column's own order.
+function transitionTo(
+  list,
+  column
+) {
+  return currentBoard().columns[column].statusIds.map(id => list.find(t => String(t.to?.id) === String(id))).find(Boolean) ?? null;
+}
+
+function columnVerdict(column) {
+  const current = drag;
+  if (!current.transitions) {
+    current.transitions = loadTransitions(current.key);
+    current.transitions.promise.then(() => {
+      if (drag === current) followPointer();
+    });
+  }
+  const { list, error } = current.transitions;
+  if (error) return { refused: true, hint: `Transitions unavailable: ${error}` };
+  if (!list) return { refused: false, hint: "Checking the transitions…" };
+  const board = currentBoard();
+  const index = Number(column.dataset.col);
+  const transition = transitionTo(
+    list,
+    index
+  );
+  if (transition) return { refused: false, hint: transition.name };
+  const status = board.statuses[board.issues.find(i => i.key === current.key)?.statusId]?.name ?? "its status";
+  return { refused: true, hint: `No transition from ${status} to ${board.columns[index].name}` };
+}
+
+// A read, made once per drag and only when the card leaves its column.
+function loadTransitions(key) {
+  const result = { list: null, error: null };
+  result.promise = fetch(`/transitions/${encodeURIComponent(key)}`)
+    .then(async response => {
+      const body = await response.json().catch(() => ({}));
+      if (!response.ok) throw new Error(body.message || body.errorMessages?.join(", ") || response.statusText);
+      result.list = body.transitions ?? [];
+    })
+    .catch(error => { result.error = error.message; })
+    .then(() => result);
+  return result;
 }
 
 // Card before which to put the slot (null: at the end of the column), based on the card nearest the
 // pointer: left / right when cards are side by side at its height, top / bottom otherwise.
-function slotAt(pointer) {
+function slotAt(
+  pointer,
+  cards
+) {
   let nearest = null;
-  for (const card of drag.cards.querySelectorAll(".card:not(.placeholder)")) {
+  for (const card of cards.querySelectorAll(".card:not(.placeholder)")) {
     const r = card.getBoundingClientRect();
     const dx = Math.max(r.left - pointer.x, 0, pointer.x - r.right);
     const dy = Math.max(r.top - pointer.y, 0, pointer.y - r.bottom);
@@ -2134,16 +2195,20 @@ function slotAt(pointer) {
   }
   if (!nearest) return undefined;
   const { card, r } = nearest;
-  const sideBySide = getComputedStyle(drag.cards).gridTemplateColumns.split(" ").length > 1 && pointer.y >= r.top && pointer.y <= r.bottom;
+  const sideBySide = getComputedStyle(cards).gridTemplateColumns.split(" ").length > 1 && pointer.y >= r.top && pointer.y <= r.bottom;
   const before = sideBySide ? pointer.x < r.left + r.width / 2 : pointer.y < r.top + r.height / 2;
   return before ? card : card.nextElementSibling;
 }
 
-// Moves the slot, and slides the cards it pushes aside from their former position (FLIP).
-function movePlaceholder(before) {
-  const { card: placeholder, cards } = drag;
-  if (before === placeholder || placeholder.nextElementSibling === before) return;
-  const others = [...cards.children].filter(el => el !== placeholder);
+// Moves the slot, and slides the cards it pushes aside from their former position (FLIP), in the column it
+// leaves as in the one it enters.
+function movePlaceholder(
+  before,
+  cards
+) {
+  const placeholder = drag.card;
+  if (placeholder.parentElement === cards && (before === placeholder || placeholder.nextElementSibling === before)) return;
+  const others = [...new Set([placeholder.parentElement, cards])].flatMap(el => [...el.children]).filter(el => el !== placeholder);
   const first = new Map(others.map(el => [el, el.getBoundingClientRect()]));
   cards.insertBefore(placeholder, before);
   for (const el of others) {
@@ -2174,8 +2239,8 @@ function autoScroll() {
   drag.scrollFrame = requestAnimationFrame(autoScroll);
 }
 
-// Drop: the card slides into its place, then the rank is sent to Jira if the place changed.
-// Escape or a drop outside the column: it goes back where it came from.
+// Drop: the card slides into its place, then the rank (and the transition, in another column) is sent to
+// Jira if the place changed. Escape or a drop on a refused column: it goes back where it came from.
 function dropCard(cancelled) {
   const current = drag;
   drag = null;
@@ -2184,8 +2249,15 @@ function dropCard(cancelled) {
   cancelAnimationFrame(current.scrollFrame);
   const { card, ghost, cards } = current;
   const refused = document.querySelector(".column.drag-refused");
-  if (cancelled || refused) cards.insertBefore(card, current.home);
-  const moved = card.nextElementSibling !== current.home;
+  const landed = card.closest(".column");
+  // Jira may answer after the pointer left the slot's column: it counts as a drop on it.
+  const unreachable = landed !== current.origin && (current.transitions?.error || current.transitions?.list && !transitionTo(
+    current.transitions.list,
+    Number(landed.dataset.col)
+  ));
+  if (cancelled || refused || unreachable) cards.insertBefore(card, current.home);
+  const column = card.parentElement === cards ? null : Number(card.closest(".column").dataset.col);
+  const moved = column !== null || card.nextElementSibling !== current.home;
   const target = card.getBoundingClientRect();
   const from = ghost.getBoundingClientRect();
   const landing = ghost.animate(
@@ -2198,14 +2270,22 @@ function dropCard(cancelled) {
   landing.finished.catch(() => null).then(() => {
     ghost.remove();
     card.classList.remove("placeholder");
-    document.querySelectorAll(".drag-origin, .drag-refused").forEach(el => el.classList.remove("drag-origin", "drag-refused"));
+    document.querySelectorAll(".drag-origin, .drag-refused, .drag-target").forEach(el => el.classList.remove("drag-origin", "drag-refused", "drag-target"));
     document.body.classList.remove("card-dragging");
-    if (moved) {
-      const previous = card.previousElementSibling?.dataset.key;
-      const next = card.nextElementSibling?.dataset.key;
+    const previous = card.previousElementSibling?.dataset.key;
+    const next = card.nextElementSibling?.dataset.key;
+    const neighbour = next ? { before: next } : previous ? { after: previous } : null;
+    if (column !== null) {
+      moveIssue(
+        current.key,
+        column,
+        neighbour,
+        current.transitions ?? loadTransitions(current.key)
+      );
+    } else if (moved) {
       rankIssue(
         current.key,
-        next ? { before: next } : { after: previous }
+        neighbour
       );
     } else if (state.renderLater) {
       renderBoard();
@@ -2220,24 +2300,115 @@ async function rankIssue(
 ) {
   const board = currentBoard();
   const previous = board.issues.slice();
-  const issue = board.issues.find(i => i.key === key);
-  board.issues.splice(board.issues.indexOf(issue), 1);
-  const at = board.issues.findIndex(i => i.key === (neighbour.before ?? neighbour.after));
-  board.issues.splice(neighbour.before ? at : at + 1, 0, issue);
+  placeIssue(
+    board,
+    board.issues.find(i => i.key === key),
+    neighbour
+  );
   renderBoard();
   try {
-    const response = await fetch("/rank", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ issue: key, ...neighbour }),
-    });
-    if (!response.ok) throw new Error((await response.json().catch(() => ({}))).message || response.statusText);
+    await write(
+      "/rank",
+      { issue: key, ...neighbour }
+    );
     saveSnapshot();
   } catch (error) {
     board.issues = previous;
     if (currentBoard() === board) renderBoard();
     flashError(`${key} could not be moved: ${error.message}`);
   }
+}
+
+// Same in another column: the card shows there right away, in the status the transition leads to; if Jira
+// has no such transition or refuses it (a field its screen requires, for instance), it goes back.
+async function moveIssue(
+  key,
+  column,
+  neighbour,
+  transitions
+) {
+  const board = currentBoard();
+  const issue = board.issues.find(i => i.key === key);
+  const before = { issues: board.issues.slice(), statusId: issue.statusId, done: issue.done };
+  const show = statusId => {
+    issue.statusId = statusId;
+    issue.done = board.statuses[statusId]?.category === "done";
+  };
+  let transition = transitions.list && transitionTo(
+    transitions.list,
+    column
+  );
+  // Jira has not answered yet: the column's first status, until the transition is known.
+  show(transition?.to.id ?? board.columns[column].statusIds[0]);
+  if (neighbour) {
+    placeIssue(
+      board,
+      issue,
+      neighbour
+    );
+  }
+  renderBoard();
+  try {
+    if (!transition) {
+      const { list, error } = await transitions.promise;
+      if (error) throw new Error(error);
+      transition = transitionTo(
+        list,
+        column
+      );
+      if (!transition) throw new Error("no transition leads there from its status");
+      show(transition.to.id);
+      if (currentBoard() === board) renderBoard();
+    }
+    const body = await write(
+      "/transition",
+      { issue: key, transition: String(transition.id) }
+    );
+    remember(body.issue);
+    if (state.openKey === key) rerenderDetail();
+  } catch (error) {
+    board.issues = before.issues;
+    show(before.statusId);
+    issue.done = before.done;
+    if (currentBoard() === board) renderBoard();
+    flashError(`${key} could not be moved to ${board.columns[column].name}: ${error.message}`);
+    return;
+  }
+  saveSnapshot();
+  if (!neighbour) return;
+  try {
+    await write(
+      "/rank",
+      { issue: key, ...neighbour }
+    );
+  } catch (error) {
+    flashError(`${key} was moved, but not to that place in the column: ${error.message}`);
+  }
+}
+
+function placeIssue(
+  board,
+  issue,
+  neighbour
+) {
+  board.issues.splice(board.issues.indexOf(issue), 1);
+  const at = board.issues.findIndex(i => i.key === (neighbour.before ?? neighbour.after));
+  board.issues.splice(neighbour.before ? at : at + 1, 0, issue);
+}
+
+// The page's writes: always through this server, which builds the Jira request itself.
+async function write(
+  path,
+  payload
+) {
+  const response = await fetch(path, {
+    method: "PUT",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(payload),
+  });
+  const body = await response.json().catch(() => ({}));
+  if (!response.ok) throw new Error(body.message || response.statusText);
+  return body;
 }
 
 function flashError(message) {
@@ -2419,13 +2590,10 @@ async function assignIssue(
   renderBoard();
   if (state.openKey === key) rerenderDetail();
   try {
-    const response = await fetch("/assignee", {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ issue: key, assignee: user?.login ?? null }),
-    });
-    const body = await response.json().catch(() => ({}));
-    if (!response.ok) throw new Error(body.message || response.statusText);
+    const body = await write(
+      "/assignee",
+      { issue: key, assignee: user?.login ?? null }
+    );
     // The server resynced its copy after the write: the detail shows what Jira now holds.
     remember(body.issue);
     saveSnapshot();

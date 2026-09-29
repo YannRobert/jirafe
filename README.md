@@ -13,9 +13,9 @@ reads from the cache instead of waiting for Jira. Navigation is instant, without
 the board and open issues are kept up to date without you having to press F5.
 
 **Mostly for reading, with a few edits.** Jirafe was designed for consulting the board, but it can
-already reorder issues by dragging a card by its grip (⠿) within its column, and change an issue's assignee from the
-detail panel (click the assignee, or press `A`). Changing an issue's status by dragging its card to
-another column is next (see [Roadmap](#roadmap)).
+already move issues by dragging a card by its grip (⠿): within its column to reorder it, or to another
+column to change its status (only columns a Jira transition leads to accept it). It can also change an
+issue's assignee from the detail panel (click the assignee, or press `A`).
 
 ## Requirements
 
@@ -130,8 +130,10 @@ browser ──► http://localhost:8766 ──► Jira
 | `GET /` | the page (`src/jirafe/static/index.html`, configuration injected) |
 | `GET /jira/<path>` | relay to Jira, restricted to an allow-list of paths |
 | `GET /issue/<key>` | local copy of the issue; `?sync=1` resyncs it (`&force=1` ignores freshness) |
-| `PUT /rank` | reorders an issue on the board — one of the two possible writes |
-| `PUT /assignee` | changes an issue's assignee (`null` unassigns) — the other possible write |
+| `GET /transitions/<key>` | transitions available from the issue's status |
+| `PUT /rank` | reorders an issue on the board — one of the three possible writes |
+| `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
+| `PUT /transition` | applies a transition to an issue (changes its status) |
 | `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
 | `GET /mirror/status` | state of the local copy |
 
@@ -154,8 +156,9 @@ It is a cache: it can be deleted, and it rebuilds itself at the next launch.
 - The server only listens on `127.0.0.1`; any other `Host` header is rejected (DNS rebinding).
 - The PAT never leaves the server: the browser never sees it.
 - Only `GET` is relayed, and only to the paths the page reads.
-- The only two writes (`PUT /rank` and `PUT /assignee`) require the same origin and a JSON body; the
-  server builds the Jira request itself from validated values (issue keys, a user login).
+- The only three writes (`PUT /rank`, `PUT /assignee` and `PUT /transition`) require the same origin and
+  a JSON body; the server builds the Jira request itself from validated values (issue keys, a user login,
+  a transition id).
 
 To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
@@ -179,7 +182,6 @@ tests/                    unittest tests, no network
 
 ## Roadmap
 
-- **Next:** change an issue's status by dragging its card to another column.
 - **Ideas, not implemented and not committed to:**
   - more edits from the page, such as adding a comment or editing the description;
   - handing edits over to your own AI agent: rather than coding every possible change into Jirafe, the

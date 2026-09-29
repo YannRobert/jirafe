@@ -18,6 +18,8 @@ from .constants import (
     RANK_PATH,
     RELAYED_PREFIXES,
     STATIC_DIR,
+    TRANSITION_ID,
+    TRANSITIONS_PATH,
     USER_LOGIN,
 )
 from .jira import JiraError
@@ -69,13 +71,15 @@ def make_handler(
                 self.send_json(200, meter.snapshot())
             elif self.path.startswith("/issue/"):
                 self.send_issue()
+            elif self.path.startswith("/transitions/"):
+                self.send_transitions()
             else:
                 self.send_json(404, {"message": "not found"})
 
         def do_PUT(self):
             if not self.host_allowed() or not self.same_origin():
                 return
-            route = {"/rank": self.put_rank, "/assignee": self.put_assignee}.get(self.path)
+            route = {"/rank": self.put_rank, "/assignee": self.put_assignee, "/transition": self.put_transition}.get(self.path)
             if route is None:
                 self.send_json(404, {"message": "not found"})
                 return
@@ -106,6 +110,7 @@ def make_handler(
                 return
             position = "rankBeforeIssue" if before else "rankAfterIssue"
             response = self.write_jira(
+                "PUT",
                 RANK_PATH,
                 {"issues": [key], position: neighbour}
             )
@@ -134,9 +139,39 @@ def make_handler(
                 self.send_json(400, {"message": "one issue key, and an assignee login (null to unassign)"})
                 return
             response = self.write_jira(
+                "PUT",
                 ASSIGNEE_PATH.format(key=key),
                 {"name": login}
             )
+            self.answer_issue_write(
+                key,
+                response,
+                "assigned"
+            )
+
+        def put_transition(self, request):
+            key, transition = request.get("issue"), request.get("transition")
+            if not (isinstance(key, str) and ISSUE_KEY.match(key)) or not (isinstance(transition, str) and TRANSITION_ID.match(transition)):
+                self.send_json(400, {"message": "one issue key, and a transition id"})
+                return
+            # Jira checks that the transition is available from the issue's current status.
+            response = self.write_jira(
+                "POST",
+                TRANSITIONS_PATH.format(key=key),
+                {"transition": {"id": transition}}
+            )
+            self.answer_issue_write(
+                key,
+                response,
+                "transitioned"
+            )
+
+        def answer_issue_write(
+                self,
+                key,
+                response,
+                done
+        ):
             if response is None:
                 return
             status, body = response
@@ -153,17 +188,18 @@ def make_handler(
                 entry = mirror.sync_issue(key)
             except (OSError, http.client.HTTPException, JiraError, ValueError):
                 entry = None
-            self.send_json(200, {"assigned": key, "issue": entry})
+            self.send_json(200, {done: key, "issue": entry})
 
         def write_jira(
                 self,
+                method,
                 path,
                 payload
         ):
-            """PUT to Jira with a body built here, never one relayed from the page; None once a 502 is sent."""
+            """Write to Jira with a body built here, never one relayed from the page; None once a 502 is sent."""
             try:
                 status, body, headers = upstream.request(
-                    "PUT",
+                    method,
                     f"{settings['jira_host']}/{path}",
                     {
                         "Authorization": "Bearer " + settings["jira_token"],
@@ -220,6 +256,19 @@ def make_handler(
                     self.send_json(200, {**cached, "syncError": str(error)})
                 else:
                     self.send_json(502, {"message": f"sync failed: {error}"})
+
+        def send_transitions(self):
+            # Read only when a dragged card reaches another column: which columns it may go to. Fields a
+            # transition requires are not checked here: Jira lists some that are always filled (summary), its
+            # refusal says better what is missing.
+            key = self.path[len("/transitions/"):]
+            if not ISSUE_KEY.match(key):
+                self.send_json(400, {"message": "invalid issue key"})
+                return
+            self.relay(
+                f"{settings['jira_host']}/{TRANSITIONS_PATH.format(key=key)}",
+                "page"
+            )
 
         def host_allowed(self):
             # Refuses any other host name: otherwise a third-party page pointing its domain to 127.0.0.1
