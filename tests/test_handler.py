@@ -4,9 +4,10 @@ import json
 import tempfile
 import threading
 import unittest
+from unittest import mock
 from http.server import ThreadingHTTPServer
 
-from jirafe.constants import BASE_DETAIL_FIELDS
+from jirafe.constants import BASE_DETAIL_FIELDS, DEFAULT_RECENT_MINUTES
 from jirafe.handler import make_handler
 from jirafe.meter import RequestMeter
 from jirafe.mirror import IssueMirror
@@ -375,8 +376,19 @@ class HandlerTest(unittest.TestCase):
         self.assertFalse(self.mirror.watched())
         status, body = self.call("GET", "/changes")
         self.assertEqual(status, 200)
-        self.assertEqual(json.loads(body), {"changedAt": None})
+        self.assertEqual(json.loads(body), {"changedAt": None, "recent": {}})
         self.assertTrue(self.mirror.watched())
         self.mirror.changed_at = 1_700_000_000.5
         status, body = self.call("GET", "/changes")
-        self.assertEqual(json.loads(body), {"changedAt": 1_700_000_000_500})
+        self.assertEqual(json.loads(body)["changedAt"], 1_700_000_000_500)
+
+    def test_changes_lists_the_recently_updated_issues(self):
+        with mock.patch.object(
+            self.mirror,
+            "recently_updated",
+            return_value={"ABC-1": 1_700_000_000_000}
+        ) as recent:
+            status, body = self.call("GET", "/changes")
+        self.assertEqual(json.loads(body)["recent"], {"ABC-1": 1_700_000_000_000})
+        recent.assert_called_once_with(DEFAULT_RECENT_MINUTES)
+        self.assertEqual(self.upstream.requests, [])

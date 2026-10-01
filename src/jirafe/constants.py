@@ -38,6 +38,11 @@ SEARCH_PAGE_SIZE = 50
 # instead of every --sync-interval; without news from the page for WATCH_TTL_S, it slows down again.
 WATCH_INTERVAL_S = 30
 WATCH_TTL_S = 45
+# The page highlights the cards of issues changed in Jira for less than this (recentMinutes in the
+# configuration): within the same working session, what colleagues changed catches the eye.
+DEFAULT_RECENT_MINUTES = 120
+# A week: beyond it, "recent" no longer means anything on a sprint board.
+MAX_RECENT_MINUTES = 7 * 24 * 60
 # On Windows, replacing a file another thread is reading fails (PermissionError): the read lasts a few
 # milliseconds, a few spaced attempts are enough.
 REPLACE_ATTEMPTS = 5

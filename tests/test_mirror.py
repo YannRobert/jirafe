@@ -189,6 +189,29 @@ class IncrementalPassTest(unittest.TestCase):
         self.assertEqual(self.mirror.read("ABC-2")["data"]["fields"]["summary"], "New")
         self.assertEqual(self.mirror.changed_at, later)
 
+    def test_recently_updated_issues(self):
+        # 10:00 +0100 on 2026-01-02, then ABC-2 changes an hour later.
+        ten = 1_767_344_400_000
+        self.jira.issues[1] = {"key": "ABC-2", "fields": {"updated": "2026-01-02T11:00:00.000+0100"}}
+        with mock.patch("jirafe.mirror.time.time", return_value=ten / 1000 + 60):
+            self.assertEqual(self.mirror.recently_updated(15), {"ABC-1": ten, "ABC-2": ten})
+        self.mirror.sync_board()
+        with mock.patch("jirafe.mirror.time.time", return_value=ten / 1000 + 3600 + 60):
+            self.assertEqual(self.mirror.recently_updated(15), {"ABC-2": ten + 3_600_000})
+
+    def test_recently_updated_read_from_the_files_after_a_restart(self):
+        ten = 1_767_344_400_000
+        restarted = IssueMirror(
+            self.directory.name,
+            self.jira,
+            42,
+            BASE_DETAIL_FIELDS
+        )
+        with mock.patch("jirafe.mirror.time.time", return_value=ten / 1000 + 90):
+            self.assertEqual(restarted.recently_updated(2), {"ABC-1": ten, "ABC-2": ten})
+            self.assertEqual(restarted.recently_updated(1), {})
+        self.assertEqual(self.jira.paths, [])
+
     def test_frequent_pass_reuses_the_active_sprints(self):
         self.mirror.sync_board(refresh_sprints=False)
         self.assertFalse([path for path in self.jira.paths if "/sprint?" in path])

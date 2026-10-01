@@ -9,6 +9,7 @@ from urllib.parse import parse_qs, urlsplit
 from .constants import (
     ASSIGNEE_PATH,
     CONFIG_PLACEHOLDER,
+    DEFAULT_RECENT_MINUTES,
     FORWARDED_RESPONSE_HEADERS,
     IMAGE_MAX_AGE_S,
     IMAGE_PREFIXES,
@@ -93,7 +94,13 @@ def make_handler(
             elif self.path == "/changes":
                 # Asked by the page while it is visible: it is also what tells the mirror someone is watching.
                 mirror.watch()
-                self.send_json(200, {"changedAt": mirror.changed_at and int(mirror.changed_at * 1000)})
+                self.send_json(
+                    200,
+                    {
+                        "changedAt": mirror.changed_at and int(mirror.changed_at * 1000),
+                        "recent": mirror.recently_updated(settings.get("recent_minutes", DEFAULT_RECENT_MINUTES)),
+                    }
+                )
             elif self.path == "/stats":
                 self.send_json(200, meter.snapshot())
             elif self.path.startswith("/issue/"):

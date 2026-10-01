@@ -46,7 +46,7 @@ from http.server import ThreadingHTTPServer
 from pathlib import Path
 
 from .config import ConfigError, load_config
-from .constants import DEFAULT_PORT, DEFAULT_SYNC_INTERVAL_S
+from .constants import DEFAULT_PORT, DEFAULT_RECENT_MINUTES, DEFAULT_SYNC_INTERVAL_S
 from .handler import make_handler
 from .jira import JiraClient
 from .meter import RequestMeter
@@ -102,6 +102,7 @@ def main():
         "jira_host": jira_host,
         "jira_token": jira_token,
         "quiet": args.quiet,
+        "recent_minutes": config.get("recentMinutes", DEFAULT_RECENT_MINUTES),
         "public": {
             "jiraWeb": jira_host,
             "boardId": board_id,

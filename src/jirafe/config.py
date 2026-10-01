@@ -6,7 +6,7 @@ JSON file in the user's configuration directory (see paths.py), which command-li
 import json
 import re
 
-from .constants import FIELD_ROLES, MAX_VIEWS
+from .constants import FIELD_ROLES, MAX_RECENT_MINUTES, MAX_VIEWS
 
 CUSTOM_FIELD = re.compile(r"^customfield_[0-9]+$")
 
@@ -42,7 +42,7 @@ def validate(
         config,
         source
 ):
-    unknown = set(config) - {"jiraHost", "boardId", "fields", "views"}
+    unknown = set(config) - {"jiraHost", "boardId", "fields", "views", "recentMinutes"}
     if unknown:
         raise ConfigError(f"{source}: unknown key(s): {', '.join(sorted(unknown))}")
     host = config.get("jiraHost")
@@ -51,6 +51,9 @@ def validate(
     board = config.get("boardId")
     if board is not None and not (isinstance(board, int) and not isinstance(board, bool) and board > 0):
         raise ConfigError(f"{source}: boardId must be a positive integer")
+    recent = config.get("recentMinutes")
+    if recent is not None and not (isinstance(recent, int) and not isinstance(recent, bool) and 0 <= recent <= MAX_RECENT_MINUTES):
+        raise ConfigError(f"{source}: recentMinutes must be an integer from 0 (no highlight) to {MAX_RECENT_MINUTES}")
     fields = config.get("fields", {})
     if not isinstance(fields, dict):
         raise ConfigError(f"{source}: fields must be an object {{role: \"customfield_…\"}}")

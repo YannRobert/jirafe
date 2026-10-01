@@ -44,6 +44,10 @@ class IssueMirror:
         # Last time a pass found an issue that differs from its local copy (epoch seconds): the page reloads
         # its board when it is older.
         self.changed_at = None
+        # When each issue last changed in Jira (epoch milliseconds): read from the files at the first
+        # question, then kept up to date by every write, so that the page's frequent polling reads no file.
+        self._updated = None
+        self._updated_lock = threading.Lock()
 
     def read(self, key):
         try:
@@ -118,6 +122,23 @@ class IssueMirror:
             "directory": str(self._issues),
         }
 
+    def recently_updated(self, minutes):
+        """Issues changed in Jira in the last minutes: {key: epoch milliseconds}."""
+        with self._updated_lock:
+            if self._updated is None:
+                self._updated = {}
+                for path in self._issues.glob("*.json"):
+                    entry = self.read(path.stem)
+                    if entry:
+                        self._note_updated(entry["data"])
+            since = (time.time() - minutes * 60) * 1000
+            return {key: at for key, at in self._updated.items() if at >= since}
+
+    def _note_updated(self, issue):
+        at = jira_time(issue.get("fields", {}).get("updated"))
+        if at is not None:
+            self._updated[issue["key"]] = at
+
     def _search_changed(self, jql):
         stale = [
             issue["key"] for issue in self._search(
@@ -171,6 +192,9 @@ class IssueMirror:
             self._issues / f"{issue['key']}.json",
             entry
         )
+        with self._updated_lock:
+            if self._updated is not None:
+                self._note_updated(issue)
         return entry
 
     def _read_state(self):
@@ -205,6 +229,14 @@ def slim_history(history):
 
 def iso(epoch_seconds):
     return datetime.fromtimestamp(epoch_seconds, timezone.utc).isoformat(timespec="seconds")
+
+
+def jira_time(text):
+    """Epoch milliseconds of a Jira date ("2026-01-02T10:00:00.000+0100"); None if missing or unreadable."""
+    try:
+        return int(datetime.strptime(text, "%Y-%m-%dT%H:%M:%S.%f%z").timestamp() * 1000)
+    except (TypeError, ValueError):
+        return None
 
 
 def run_background_sync(

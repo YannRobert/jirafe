@@ -37,7 +37,7 @@ class LoadConfigTest(unittest.TestCase):
             )
 
     def test_valid_configuration(self):
-        self.write('{"jiraHost": "https://jira.example.com", "boardId": 42, "fields": {"developer": "customfield_1"}}')
+        self.write('{"jiraHost": "https://jira.example.com", "boardId": 42, "fields": {"developer": "customfield_1"}, "recentMinutes": 60}')
         config = load_config(
             self.path,
             required=True
@@ -73,6 +73,9 @@ class LoadConfigTest(unittest.TestCase):
             "view with blank label": '{"views": [{"label": " ", "from": "À faire"}]}',
             "view with unknown key": '{"views": [{"label": "Dev", "from": "À faire", "to": "Done"}]}',
             "two views on the same column": '{"views": [{"label": "A", "from": "In Progress"}, {"label": "B", "from": "in progress"}]}',
+            "recentMinutes not an integer": '{"recentMinutes": "120"}',
+            "negative recentMinutes": '{"recentMinutes": -1}',
+            "recentMinutes over a week": '{"recentMinutes": 100000}',
             "too many views": '{"views": [%s]}' % ", ".join('{"label": "V", "from": "C%d"}' % i for i in range(9)),
         }
         for case, content in invalid.items():

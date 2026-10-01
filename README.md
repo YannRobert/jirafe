@@ -100,6 +100,9 @@ Creating it takes a few minutes with a text editor:
 ]
 ```
 
+- `recentMinutes` (optional, default `120`): the cards of issues changed in Jira for less than this many
+  minutes get a colored edge on their right side, so that what colleagues just changed catches the eye. `0` turns it off.
+
 `--jira-host` and `--board` override the file; `--config` points to another one.
 
 ## Running
@@ -148,7 +151,7 @@ browser ──► http://localhost:8766 ──► Jira
 | `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
 | `PUT /transition` | brings an issue to a status, through the transitions of the path |
 | `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
-| `GET /changes` | when the background sync last found a changed issue; tells the server a page is watching |
+| `GET /changes` | when the background sync last found a changed issue, and the recently changed issues; tells the server a page is watching |
 | `GET /mirror/status` | state of the local copy |
 
 - **Board in one call**: `allData.json`, the endpoint used by Jira's own board page.

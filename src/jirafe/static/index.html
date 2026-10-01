@@ -40,6 +40,7 @@ try {
     --shadow: 0 1px 2px rgba(0, 0, 0, .35);
     --panel-shadow: -8px 0 32px -8px rgba(0, 0, 0, .6);
     --panel-shadow-left: 8px 0 32px -8px rgba(0, 0, 0, .6);
+    --recent: #f5b84a;
   }
   :root[data-theme="light"] {
     color-scheme: light;
@@ -63,6 +64,7 @@ try {
     --shadow: 0 1px 2px rgba(60, 40, 20, .18);
     --panel-shadow: -8px 0 32px -8px rgba(60, 40, 20, .3);
     --panel-shadow-left: 8px 0 32px -8px rgba(60, 40, 20, .3);
+    --recent: #d9860f;
   }
   * { box-sizing: border-box; }
   /* The base size follows the screen width: the board stays readable from a laptop to a wall screen. */
@@ -297,6 +299,11 @@ try {
   .drag-ghost[data-hint-kind="info"]::after { background: var(--chip); color: var(--text); }
   /* The slot stands in for the "—" of an empty column it enters. */
   .cards:has(> .card) > .empty-col { display: none; }
+  /* Changed in Jira lately (recentMinutes), so that the eye finds what colleagues just touched without a
+     badge cluttering the board: a colored edge on the right side, where the epic chips' colors are not.
+     Deliberately still: an animated highlight repaints at every frame, and a low-end PC showing 20 of them
+     spent a fifth of a core on it. An inset shadow takes no room, so the card keeps its size. */
+  .card.recent:not(.placeholder, .drag-ghost) { box-shadow: var(--shadow), inset -3px 0 0 var(--recent); }
   .card.selected { background: var(--selected); outline: 2px solid var(--accent); outline-offset: -2px; }
   /* Picked with Ctrl or Shift + click, for Ctrl+C: outlined like the open issue, with a tick in the free corner
      (inside: content-visibility clips whatever overflows the card). */
@@ -718,6 +725,8 @@ const $ = id => document.getElementById(id);
 const params = new URLSearchParams(location.search);
 
 const state = {
+  // Issues changed in Jira lately, {key: epoch milliseconds}, as GET /changes lists them.
+  recent: {},
   meta: null,
   boards: {},
   defaultSprint: null,
@@ -1444,7 +1453,7 @@ function card(
   board
 ) {
   const epic = board.epics[issue.epicId];
-  const classes = ["card", issue.done ? "done" : "", issue.key === state.openKey ? "selected" : "", state.picked.has(issue.key) ? "picked" : ""].filter(Boolean).join(" ");
+  const classes = ["card", issue.done ? "done" : "", issue.key === state.openKey ? "selected" : "", issue.key in state.recent ? "recent" : "", state.picked.has(issue.key) ? "picked" : ""].filter(Boolean).join(" ");
   // draggable="false": otherwise pressing a link and moving drags its URL instead of selecting text.
   return `<a class="${classes}" href="${browseUrl(issue.key)}" data-key="${escapeHtml(issue.key)}" draggable="false">` +
     `<div class="top"><span class="id">${GRIP}<span class="key">${escapeHtml(issue.key)}</span></span>` +
@@ -1718,11 +1727,29 @@ async function syncDetail(
 // browser): the board is reloaded, once for all tabs thanks to the shared refresh.
 async function watchChanges() {
   if (document.hidden) return;
-  const { changedAt } = await fetch("/changes").then(response => response.json()).catch(() => ({}));
+  const { changedAt } = await pollChanges();
   reloadOpenDetail();
   const board = currentBoard();
   if (!changedAt || !board || board.at >= changedAt || !state.autoRefresh || drag?.started || state.refreshing) return;
   sharedRefresh({ olderThan: Date.now() - changedAt });
+}
+
+async function pollChanges() {
+  const changes = await fetch("/changes").then(response => response.json()).catch(() => ({}));
+  if (changes.recent) {
+    state.recent = changes.recent;
+    markRecent();
+  }
+  return changes;
+}
+
+// At each poll rather than at each render: a card stops shining once its change gets old, without redrawing
+// the board.
+function markRecent() {
+  document.querySelectorAll(".column .card[data-key]").forEach(card => card.classList.toggle(
+    "recent",
+    card.dataset.key in state.recent
+  ));
 }
 
 // What the background sync has written since opening is shown without asking Jira anything.
@@ -3267,6 +3294,8 @@ window.addEventListener("storage", e => {
 setInterval(renderStatus, 15 * 1000);
 setInterval(refreshLoad, LOAD_REFRESH_MS);
 setInterval(watchChanges, CHANGES_POLL_MS);
+// Without waiting for the first poll: the cards to look at are marked from the first render.
+pollChanges();
 $("panel-sync").addEventListener("click", e => {
   if (e.target.closest(".resync") && state.openKey) syncDetail(
     state.openKey,
