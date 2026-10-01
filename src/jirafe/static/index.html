@@ -1157,7 +1157,7 @@ function renderFilters() {
       `<button type="button" class="qf${isMyFilter(f) ? " me" : ""}" data-qf="${f.id}" aria-pressed="${state.quick.has(f.id)}" ` +
       `title="${isMyFilter(f) ? "You · " : ""}${escapeHtml(f.description || f.query)}">${isMyFilter(f) ? myName(f.name) : escapeHtml(f.name)}</button>`).join("") +
     labelsHtml(board) +
-    `<span class="search"><input id="q" type="search" placeholder="Search (key, summary, person, epic)  /" value="${escapeHtml(state.q)}" aria-label="Search">` +
+    `<span class="search"><input id="q" type="search" placeholder="Search (key, summary, type…)  /" title="Key, summary, assignee, epic, labels, type, status, priority — every word must match" value="${escapeHtml(state.q)}" aria-label="Search">` +
     (board ? `<span class="count">${countText(board)}</span>` : "") + `</span>`;
 }
 
@@ -1389,7 +1389,8 @@ function haystack(
   board
 ) {
   const epic = board.epics[issue.epicId];
-  return normalize(`${issue.key} ${issue.summary} ${issue.assigneeName ?? ""} ${epic?.text ?? ""} ${epic?.key ?? ""} ${(issue.labels ?? []).join(" ")}`);
+  // Type, status and priority names as Jira shows them: "bug" only finds bugs if the type is named so.
+  return normalize(`${issue.key} ${issue.summary} ${issue.assigneeName ?? ""} ${epic?.text ?? ""} ${epic?.key ?? ""} ${(issue.labels ?? []).join(" ")} ${board.types[issue.typeId]?.name ?? ""} ${board.statuses[issue.statusId]?.name ?? ""} ${board.priorities[issue.priorityId]?.name ?? ""}`);
 }
 
 const normalize = text => text.normalize("NFD").replace(/[̀-ͯ]/g, "").toLowerCase();
