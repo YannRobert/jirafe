@@ -119,6 +119,10 @@ the board. Options are passed through (`./jirafe.sh --port 9101`). Without a lau
 cd src && python3 -m jirafe --open
 ```
 
+To keep the server running after the terminal closes (Linux / macOS): `./start.sh` starts it in the
+background with `nohup` (same options as `jirafe.sh`, browser not opened), `./stop.sh` stops it. The pid and
+the log (`jirafe.log`) sit next to the local copy, in `~/.cache/jirafe` (`~/Library/Caches/jirafe` on macOS).
+
 Then open <http://localhost:8766>.
 
 ### Options
@@ -186,6 +190,7 @@ To report a vulnerability, see [SECURITY.md](SECURITY.md).
 
 ```
 jirafe.cmd, jirafe.sh     Windows and Linux / macOS launchers
+start.sh, stop.sh         background server (Linux / macOS)
 jirafe.example.json       configuration template
 src/jirafe/
   app.py                  entry point: options, configuration, startup
