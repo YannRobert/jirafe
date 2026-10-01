@@ -2877,6 +2877,9 @@ function clearPicked() {
 }
 
 function renderPicked() {
+  // Several issues picked: the detail of one of them would be misleading (A would only assign that one), and
+  // it hides the cards being picked. The open issue stays picked, and remains the anchor of Shift + click.
+  if (state.picked.size > 1 && state.openKey) closeDetail();
   for (const el of document.querySelectorAll(".card[data-key]")) el.classList.toggle("picked", state.picked.has(el.dataset.key));
   renderBulk();
 }

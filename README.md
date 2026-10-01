@@ -28,8 +28,9 @@ history, and keeps it in the local copy. A column no known path leads to refuses
 
 **Sharing a list of issues.** `Ctrl+C` copies the open issue, or the cards picked with Ctrl + click
 (Cmd + click on a Mac) or Shift + click (a range), one line per issue (key and summary; with a link to
-Jira when pasted into a mail or a chat). A bar above the board then assigns the picked issues or moves them to
-a column, after a confirmation listing each one (and the issues no known path can move, left as is).
+Jira when pasted into a mail or a chat). Picking a second card closes the detail; a bar above the board
+then assigns the picked issues or moves them to a column, after a confirmation listing each one (and the
+issues no known path can move, left as is).
 
 ## Requirements
 
