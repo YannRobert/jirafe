@@ -1,10 +1,11 @@
 import gzip
 import http.client
 import json
+import secrets
 import time
 from datetime import datetime
 from http.server import BaseHTTPRequestHandler
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, unquote, urlsplit
 
 from .constants import (
     ASSIGNEE_PATH,
@@ -18,7 +19,10 @@ from .constants import (
     LIVE_TRANSITIONS_PATH,
     MAX_TRANSITION_STEPS,
     MAX_WRITE_BODY_BYTES,
+    PAGE_CSP,
+    PAGE_NONCE_BYTES,
     RANK_PATH,
+    RELAY_DECODE_ROUNDS,
     RELAYED_PREFIXES,
     STATIC_DIR,
     STATUS_ID,
@@ -60,8 +64,12 @@ def make_handler(
     # The configuration is injected into the page: it can show its saved data without waiting for a first
     # round trip to this server. The page is read again on every request, so a change to index.html
     # applies at the next F5, without restarting the server.
-    def page():
+    def page(nonce):
+        # Nonce before configuration: a "<script>" written in the configuration stays plain text.
         return (STATIC_DIR / "index.html").read_bytes().replace(
+            b"<script>",
+            f'<script nonce="{nonce}">'.encode()
+        ).replace(
             CONFIG_PLACEHOLDER,
             config
         )
@@ -75,14 +83,19 @@ def make_handler(
             if not self.host_allowed():
                 return
             if self.path in ("/", "/index.html") or self.path.startswith("/?"):
+                nonce = secrets.token_urlsafe(PAGE_NONCE_BYTES)
                 self.send_body(
                     200,
-                    page(),
-                    {"Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-cache"}
+                    page(nonce),
+                    {
+                        "Content-Type": "text/html; charset=utf-8",
+                        "Cache-Control": "no-cache",
+                        "Content-Security-Policy": PAGE_CSP.format(nonce=nonce),
+                    }
                 )
             elif self.path.startswith("/jira/"):
                 relayed = self.path[len("/jira/"):]
-                if not relayed.startswith(RELAYED_PREFIXES) or ".." in relayed:
+                if not relay_allowed(relayed):
                     self.send_json(403, {"message": "path not relayed"})
                     return
                 self.relay(
@@ -460,6 +473,23 @@ def make_handler(
                 super().log_message(fmt, *args)
 
     return Handler
+
+
+def relay_allowed(relayed):
+    """Whether a path may be relayed to Jira: under an allowed prefix, and without a ".." even encoded —
+    Jira, or a proxy in front of it, may decode %2e%2e then climb out of the prefix."""
+    if not relayed.startswith(RELAYED_PREFIXES):
+        return False
+    # Only the path: a ".." in the query string climbs nothing, and may be a legitimate search.
+    path = relayed.split("?", 1)[0]
+    for _ in range(RELAY_DECODE_ROUNDS):
+        if ".." in path:
+            return False
+        decoded = unquote(path)
+        if decoded == path:
+            return True
+        path = decoded
+    return False
 
 
 def jira_errors(

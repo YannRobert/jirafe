@@ -47,7 +47,9 @@ MAX_RECENT_MINUTES = 7 * 24 * 60
 # milliseconds, a few spaced attempts are enough.
 REPLACE_ATTEMPTS = 5
 REPLACE_RETRY_DELAY_S = 0.05
-ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]+-[0-9]+$")
+# Patterns end with \Z rather than $: $ also matches before a final line break, which would then reach the
+# URL of a Jira request.
+ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]+-[0-9]+\Z")
 # Standard fields shown by the detail panel; custom fields are added to them according to the configuration.
 BASE_DETAIL_FIELDS = (
     "summary,status,issuetype,priority,assignee,reporter,created,updated,labels,description,comment,"
@@ -72,6 +74,18 @@ MAX_VIEWS = 8
 # of its status, which teach the workflows' graph (workflow.py) without asking Jira for it.
 ISSUE_EXPAND = "renderedFields,changelog,transitions"
 CONFIG_PLACEHOLDER = b"__CONFIG__"
+# Second line of defence behind the sanitising of the HTML rendered by Jira: a script slipped into a
+# description or a comment would not run (only the page's own scripts carry the nonce, new at every load),
+# nor could it send anything elsewhere. Images stay open to https: avatars may come from another host.
+PAGE_CSP = (
+    "default-src 'none'; script-src 'nonce-{nonce}'; style-src 'self' 'unsafe-inline'; "
+    "img-src 'self' data: https:; connect-src 'self'; base-uri 'none'; form-action 'none'; "
+    "frame-ancestors 'none'"
+)
+PAGE_NONCE_BYTES = 16
+# A relayed path is decoded this many times at most to look for a "..": a proxy then Jira may each decode
+# it once (%252e → %2e → .). Beyond, the path is refused.
+RELAY_DECODE_ROUNDS = 3
 # Below this age, the local copy of an issue (synced when the detail was opened or by the background sync)
 # is returned as is: reopening an issue or switching tabs costs no request to Jira.
 ISSUE_FRESH_S = 30
@@ -80,14 +94,14 @@ ASSIGNEE_PATH = "rest/api/2/issue/{key}/assignee"
 TRANSITIONS_PATH = "rest/api/2/issue/{key}/transitions"
 # The status of an issue and the transitions out of it, in one read: a move plans its path from both.
 LIVE_TRANSITIONS_PATH = "rest/api/2/issue/{key}?fields=status,issuetype&expand=transitions"
-STATUS_ID = re.compile(r"^[0-9]{1,10}$")
+STATUS_ID = re.compile(r"^[0-9]{1,10}\Z")
 # A move to a status the workflow does not lead to directly goes through the statuses in between, one
 # transition each, going round the workflow if need be (from C back to B through D and A): the bound only
 # stops a walk that would never end.
 MAX_TRANSITION_STEPS = 20
 # Jira Server / Data Center login: letters (accented included), digits and the usual separators. Kept
 # narrow on purpose: whatever the page sends, only something shaped like a login reaches a Jira write.
-USER_LOGIN = re.compile(r"^[\w.@+'-]{1,255}$")
+USER_LOGIN = re.compile(r"^[\w.@+'-]{1,255}\Z")
 MAX_WRITE_BODY_BYTES = 4096
 # Windows of the counter of requests to Jira, like the load average: 1, 5 and 15 minutes.
 METER_WINDOWS_S = (60, 5 * 60, 15 * 60)

@@ -68,6 +68,7 @@ class LoadConfigTest(unittest.TestCase):
             "unknown role": '{"fields": {"author": "customfield_1"}}',
             # The field name ends up in the URL of Jira requests.
             "field injecting a parameter": '{"fields": {"developer": "customfield_1&expand=x"}}',
+            "field ending with a line break": '{"fields": {"developer": "customfield_1\\n"}}',
             "views not a list": '{"views": {"label": "Dev", "from": "À faire"}}',
             "view without column": '{"views": [{"label": "Dev"}]}',
             "view with blank label": '{"views": [{"label": " ", "from": "À faire"}]}',

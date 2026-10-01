@@ -8,7 +8,7 @@ import re
 
 from .constants import FIELD_ROLES, MAX_RECENT_MINUTES, MAX_VIEWS
 
-CUSTOM_FIELD = re.compile(r"^customfield_[0-9]+$")
+CUSTOM_FIELD = re.compile(r"^customfield_[0-9]+\Z")
 
 
 class ConfigError(Exception):

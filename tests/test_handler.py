@@ -8,7 +8,7 @@ from unittest import mock
 from http.server import ThreadingHTTPServer
 
 from jirafe.constants import BASE_DETAIL_FIELDS, DEFAULT_RECENT_MINUTES
-from jirafe.handler import make_handler
+from jirafe.handler import make_handler, relay_allowed
 from jirafe.meter import RequestMeter
 from jirafe.mirror import IssueMirror
 from tests.fakes import FakeJira, FakeUpstream, FakeWorkflow
@@ -120,6 +120,26 @@ class HandlerTest(unittest.TestCase):
         self.assertIn(b'"customfield_1"', body)
         self.assertNotIn(TOKEN.encode(), body)
 
+    def test_page_scripts_only_run_with_the_nonce_of_this_load(self):
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            self.port,
+            timeout=5
+        )
+        try:
+            connection.request("GET", "/")
+            response = connection.getresponse()
+            policy, body = response.getheader("Content-Security-Policy"), response.read()
+        finally:
+            connection.close()
+        nonce = policy.split("'nonce-", 1)[1].split("'", 1)[0]
+        self.assertIn("default-src 'none'", policy)
+        self.assertIn("frame-ancestors 'none'", policy)
+        self.assertNotIn("unsafe-inline' 'nonce", policy)
+        self.assertEqual(body.count(f'<script nonce="{nonce}">'.encode()), 2)
+        self.assertNotIn(b"<script>", body)
+        self.assertNotEqual(self.call("GET", "/")[1], body)
+
     def test_foreign_host_refused(self):
         # DNS rebinding: a third-party domain pointing to 127.0.0.1.
         status, _ = self.call(
@@ -130,11 +150,27 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(status, 403)
 
     def test_relay_restricted_to_allow_list(self):
-        for path in ("/jira/rest/api/2/issue/ABC-1", "/jira/rest/agile/1.0/board/../../api/2/myself"):
+        for path in (
+            "/jira/rest/api/2/issue/ABC-1",
+            "/jira/rest/agile/1.0/board/../../api/2/myself",
+            "/jira/rest/agile/1.0/board/%2e%2e/%2E%2E/api/2/search",
+            "/jira/rest/agile/1.0/board/.%2e/.%2e/api/2/search",
+            "/jira/rest/agile/1.0/board/%252e%252e/%252e%252e/api/2/search",
+            "/jira/rest/agile/1.0/board/%25252e%25252e/api/2/search",
+        ):
             with self.subTest(path):
                 status, _ = self.call("GET", path)
                 self.assertEqual(status, 403)
         self.assertEqual(self.upstream.requests, [])
+
+    def test_relay_keeps_encoded_names_and_queries(self):
+        for path in (
+            "secure/attachment/10/my%20file%2Bv2.png",
+            "secure/attachment/10/100%25.png",
+            "rest/api/2/user/assignable/search?username=a..b&issueKey=ABC-1",
+        ):
+            with self.subTest(path):
+                self.assertTrue(relay_allowed(path))
 
     def test_allowed_relay_adds_pat_server_side(self):
         status, _ = self.call("GET", "/jira/rest/api/2/myself")
@@ -163,6 +199,8 @@ class HandlerTest(unittest.TestCase):
             {"issue": "ABC-1", "before": "ABC-2", "after": "ABC-3"},
             {"issue": "abc-1", "before": "ABC-2"},
             {"issue": "ABC-1", "before": "ABC-2&x=1"},
+            {"issue": "ABC-1\n", "before": "ABC-2"},
+            {"issue": "ABC-1", "after": "ABC-2\n"},
         )
         for payload in invalid:
             with self.subTest(payload):
@@ -210,6 +248,8 @@ class HandlerTest(unittest.TestCase):
             {"issue": "ABC-1", "assignee": "alice bob"},
             {"issue": "ABC-1", "assignee": {"name": "alice"}},
             {"issue": "ABC-1", "assignee": "x" * 256},
+            {"issue": "ABC-1\n", "assignee": "alice"},
+            {"issue": "ABC-1", "assignee": "alice\n"},
             ["ABC-1", "alice"],
         )
         for payload in invalid:
@@ -315,6 +355,8 @@ class HandlerTest(unittest.TestCase):
             {"issue": "ABC-1", "status": "4&x=1"},
             {"issue": "ABC-1", "status": {"id": "4"}},
             {"issue": "ABC-1", "status": "1" * 11},
+            {"issue": "ABC-1\n", "status": "4"},
+            {"issue": "ABC-1", "status": "4\n"},
         )
         for payload in invalid:
             with self.subTest(payload):
