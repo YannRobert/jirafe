@@ -20,6 +20,8 @@ try {
      light options with the page's dark ones. */
   :root {
     color-scheme: dark;
+    /* Width of the detail on the side, which the bulk bar steps aside from. */
+    --side-panel-width: min(44rem, 94vw);
     --bg: #24201b;
     --column: #2d2822;
     --card: #37312a;
@@ -145,6 +147,12 @@ try {
      the detail, docked on the side or at the bottom. */
   .bulk { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0 1.2rem 0.6rem; padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.5rem; background: var(--selected); font-size: 0.85rem; }
   .bulk[hidden] { display: none; }
+  /* The detail on the side covers the full height of the page: the bar moves to the half it leaves free.
+     On a narrow screen the panel takes almost all the width, and the bar keeps its place. */
+  @media (min-width: 60rem) {
+    body:has(aside:not([hidden]):not(.bottom):not(.left)) .bulk { margin-right: calc(var(--side-panel-width) + 1.2rem); }
+    body:has(aside.left:not([hidden]):not(.bottom)) .bulk { margin-left: calc(var(--side-panel-width) + 1.2rem); }
+  }
   .bulk .count { font-weight: 600; }
   .bulk select, .bulk button { border: 1px solid var(--border); border-radius: 4px; background: var(--column); color: var(--text); font: inherit; padding: 0.15rem 0.45rem; cursor: pointer; }
   .bulk select:disabled, .bulk button:disabled { opacity: 0.5; cursor: default; }
@@ -422,7 +430,7 @@ try {
 
   /* ---------- Detail panel ---------- */
   aside {
-    position: fixed; top: 0; right: 0; bottom: 0; z-index: 10; width: min(44rem, 94vw);
+    position: fixed; top: 0; right: 0; bottom: 0; z-index: 10; width: var(--side-panel-width);
     background: var(--bg); border-left: 1px solid var(--border); box-shadow: var(--panel-shadow);
     display: flex; flex-direction: column;
   }
