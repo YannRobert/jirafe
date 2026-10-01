@@ -153,6 +153,12 @@ try {
   .standup .changes { margin-top: 0.45rem; max-height: 28vh; overflow-y: auto; font-size: 0.82rem; }
   .standup .changes[hidden] { display: none; }
   .standup .changes > p { margin: 0; color: var(--muted); }
+  .standup .changes h3 { margin: 0.5rem 0 0.3rem; font-size: 0.8rem; font-weight: 600; color: var(--muted); text-transform: uppercase; letter-spacing: 0.03em; }
+  .standup .changes h3:first-child { margin-top: 0; }
+  /* An issue the person speaking acted on, now someone else's: shown for what they did, set apart from
+     their own cards. */
+  .card.handed-over { opacity: 0.7; border-style: dashed; }
+  .card .handed { margin-left: 0.3rem; font-size: 0.7rem; color: var(--muted); border: 1px solid var(--border); border-radius: 3px; padding: 0 0.3rem; }
   /* Actions on the picked cards: in the flow under the filters rather than floating, so that it never covers
      the detail, docked on the side or at the bottom. */
   .bulk { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0 1.2rem 0.6rem; padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.5rem; background: var(--selected); font-size: 0.85rem; }
@@ -849,7 +855,8 @@ const state = {
   visitSince: null,
   activity: [],
   // Stand-up mode: {people: [login, …, null for unassigned], index of the person speaking or null, spoke: a
-  // Set of indexes, since, activity}, or null.
+  // Set of indexes, since, activity, touched: keys of the issues the person speaking changed since then},
+  // or null.
   standup: null,
   notify: readPreference(NOTIFY_KEY) === "true" && window.Notification?.permission === "granted",
   meta: null,
@@ -1527,7 +1534,7 @@ function visibleIssues(board) {
   const terms = parseSearch(state.q);
   const labels = [...state.labels];
   return board.issues.filter(issue =>
-    (speaker === undefined || (issue.assignee ?? null) === speaker) && active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
+    (speaker === undefined || (issue.assignee ?? null) === speaker || state.standup.touched.has(issue.key)) && active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
       issue,
       board,
       term
@@ -1680,7 +1687,8 @@ function card(
   board
 ) {
   const epic = board.epics[issue.epicId];
-  const classes = ["card", issue.done ? "done" : "", issue.key === state.openKey ? "selected" : "", issue.key in state.recent ? "recent" : "", state.picked.has(issue.key) ? "picked" : ""].filter(Boolean).join(" ");
+  const handed = handedOver(issue);
+  const classes = ["card", issue.done ? "done" : "", issue.key === state.openKey ? "selected" : "", issue.key in state.recent ? "recent" : "", state.picked.has(issue.key) ? "picked" : "", handed ? "handed-over" : ""].filter(Boolean).join(" ");
   // draggable="false": otherwise pressing a link and moving drags its URL instead of selecting text.
   return `<a class="${classes}" href="${browseUrl(issue.key)}" data-key="${escapeHtml(issue.key)}" draggable="false">` +
     `<div class="top"><span class="id">${GRIP}<span class="key">${escapeHtml(issue.key)}</span></span>` +
@@ -1689,6 +1697,7 @@ function card(
     (epic ? `<span class="epic" style="--epic:${EPIC_COLORS[epic.color] ?? "#c1c7d0"}" title="${escapeHtml(epic.key)}">${escapeHtml(epic.text)}</span>` : "") +
     `<div class="foot">${icon(board.types[issue.typeId])}${icon(board.priorities[issue.priorityId])}` +
     (issue.points != null ? `<span class="sp" title="Story points">${formatPoints(issue.points)}</span>` : "") +
+    (handed ? `<span class="handed" title="Changed by the person speaking since ${escapeHtml(formatSince(state.standup.since))}, now assigned to someone else">handed over</span>` : "") +
     `${GRIP}</div></a>`;
 }
 
@@ -2204,7 +2213,7 @@ function toggleStandup() {
   const board = currentBoard();
   if (!board) return;
   const since = standupSince();
-  state.standup = { people: standupPeople(board), index: null, spoke: new Set(), since, activity: [] };
+  state.standup = { people: standupPeople(board), index: null, spoke: new Set(), since, activity: [], touched: new Set() };
   closeDetail();
   clearPicked();
   // Built once: the board renders again at every sync, and the field must keep what is being typed.
@@ -2223,7 +2232,9 @@ function toggleStandup() {
   ).then(response => response.ok ? response.json() : null).catch(() => null).then(body => {
     if (!body || state.standup?.since !== since) return;
     state.standup.activity = body.issues;
-    renderStandup();
+    // The issues the person speaking acted on join the board: render it all, not only the strip.
+    updateTouched();
+    renderBoard();
   });
 }
 
@@ -2238,12 +2249,45 @@ function giveFloor(index) {
   if (standup.index !== null) standup.spoke.add(standup.index);
   standup.index = index;
   if (index !== null) standup.spoke.delete(index);
+  updateTouched();
   const query = $("standup-query");
   query.value = "";
   closeDetail();
   clearPicked();
   renderBoard();
   query.focus({ preventScroll: true });
+}
+
+// The login whose changes count as theirs: undefined while nobody speaks, null for the unassigned issues,
+// which nobody authors.
+function speakerLogin() {
+  const standup = state.standup;
+  return standup?.index == null ? undefined : standup.people[standup.index];
+}
+
+const authoredBy = (
+  change,
+  login
+) => !!login && change.author?.name?.toLowerCase() === login.toLowerCase();
+
+// What the person speaking did since then, on any issue of the sprint: what they handed over counts too.
+function speakerActivity() {
+  const login = speakerLogin();
+  return state.standup.activity
+    .map(issue => ({ ...issue, changes: issue.changes.filter(change => authoredBy(
+      change,
+      login
+    )) }))
+    .filter(issue => issue.changes.length);
+}
+
+function updateTouched() {
+  state.standup.touched = new Set(speakerActivity().map(issue => issue.key));
+}
+
+function handedOver(issue) {
+  const login = speakerLogin();
+  return login !== undefined && state.standup.touched.has(issue.key) && (issue.assignee ?? null) !== login;
 }
 
 // Nobody named: the next one in the row who has not spoken yet, and nobody once everyone has.
@@ -2290,10 +2334,13 @@ function renderStandup() {
       board,
       people[index]
     );
-    const issues = visibleIssues(board);
+    const shown = visibleIssues(board);
+    const issues = shown.filter(issue => !handedOver(issue));
+    const handed = shown.length - issues.length;
     const points = issues.reduce((sum, issue) => sum + (issue.points ?? 0), 0);
     current = `${avatar(person.login, person.name, person.avatar)}${escapeHtml(person.first)}`;
-    meta = `${issues.length} issue${issues.length === 1 ? "" : "s"}${points ? ` · ${formatPoints(points)} pts` : ""} · `;
+    meta = `${issues.length} issue${issues.length === 1 ? "" : "s"}${points ? ` · ${formatPoints(points)} pts` : ""}` +
+      `${handed ? ` · ${handed} handed over` : ""} · `;
   } else {
     current = escapeHtml(spoke.size ? "Everyone spoke" : "Who starts?");
   }
@@ -2320,11 +2367,23 @@ function renderStandup() {
   const changesEl = $("standup-changes");
   changesEl.hidden = index === null;
   if (index === null) return;
-  const keys = new Set(visibleIssues(board).map(issue => issue.key));
-  const changed = standup.activity.filter(issue => keys.has(issue.key));
-  changesEl.innerHTML = changed.length
-    ? activityHtml(changed)
-    : `<p>No column move, assignment or comment on these issues since ${escapeHtml(formatSince(standup.since))}.</p>`;
+  const login = speakerLogin();
+  const since = escapeHtml(formatSince(standup.since));
+  const did = speakerActivity();
+  // What others did on the cards now theirs: a ticket sent back, a comment waiting for an answer.
+  const own = new Set(board.issues.filter(issue => (issue.assignee ?? null) === login).map(issue => issue.key));
+  const others = standup.activity
+    .filter(issue => own.has(issue.key))
+    .map(issue => ({ ...issue, changes: issue.changes.filter(change => !authoredBy(
+      change,
+      login
+    )) }))
+    .filter(issue => issue.changes.length);
+  // The unassigned issues have nobody to report on them: only what happened to them.
+  changesEl.innerHTML = (login === null ? "" : `<h3>Did since ${since}</h3>` +
+    (did.length ? activityHtml(did) : `<p>No column move, assignment or comment since ${since}.</p>`)) +
+    `<h3>${login === null ? "Changed" : "Changed by others on their issues"} since ${since}</h3>` +
+    (others.length ? activityHtml(others) : `<p>Nothing.</p>`);
 }
 
 $("standup-toggle").addEventListener("click", toggleStandup);

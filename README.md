@@ -184,9 +184,11 @@ browser ──► http://localhost:8766 ──► Jira
   ends after an hour unseen: a reload keeps the list, the next morning starts a new one.
 - **Stand-up** (`S`, or the people icon in the header): whoever speaks hands over to anyone, so the floor
   is given rather than walked through. Click a person in the row, or type the start of their first name and
-  press Enter (Enter alone, or `N`: someone who has not spoken yet). The board shows that person's cards,
-  with what changed on them since the previous working day (Friday on a Monday); the row greys out those who
-  already spoke and counts those left. `Escape` twice returns to the whole board.
+  press Enter (Enter alone, or `N`: someone who has not spoken yet). Since the previous working day (Friday
+  on a Monday), the strip lists what that person did — column moves, assignments, comments, on any issue —
+  then what others changed on their issues. The board shows their cards, plus the issues they acted on and
+  handed over (dashed). The row greys out those who already spoke and counts those left. `Escape` twice
+  returns to the whole board. Work that leaves no trace in Jira cannot show.
 - **Notifications** (bell in the header): when someone else changes an issue assigned to you, the
   browser shows what changed (status, comment, assignment…), read from the local copy at no Jira cost. A
   hidden tab keeps asking `/changes?watch=0`, which does not speed up the sync: the notification then
