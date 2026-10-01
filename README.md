@@ -138,6 +138,18 @@ Then open <http://localhost:8766>.
 | `--quiet` | — | do not log every request |
 | `--open` | — | open the browser once the server is ready |
 
+### Search
+
+Every word must match the key, summary, assignee, epic, labels, type, status or priority (accents and case
+ignored, part of a word is enough). Keywords narrow a word to one field, and a leading `-` excludes:
+
+| Keyword | Matches |
+|---|---|
+| `type:bug`, `status:"in progress"`, `priority:high` (`prio:`) | type, status, priority name |
+| `label:back`, `epic:login` | a label, the epic's name or key |
+| `@alice`, `@me`, `@none` | assignee (login, name or first name), me, unassigned |
+| `-label:back`, `-@me`, `-"won't fix"` | anything but |
+
 ## How it works
 
 ```

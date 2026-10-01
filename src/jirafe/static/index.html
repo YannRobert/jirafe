@@ -1209,7 +1209,7 @@ function renderFilters() {
       `<button type="button" class="qf${isMyFilter(f) ? " me" : ""}" data-qf="${f.id}" aria-pressed="${state.quick.has(f.id)}" ` +
       `title="${isMyFilter(f) ? "You · " : ""}${escapeHtml(f.description || f.query)}">${isMyFilter(f) ? myName(f.name) : escapeHtml(f.name)}</button>`).join("") +
     labelsHtml(board) +
-    `<span class="search"><input id="q" type="search" placeholder="Search (key, summary, type…)  /" title="Key, summary, assignee, epic, labels, type, status, priority — every word must match" value="${escapeHtml(state.q)}" aria-label="Search">` +
+    `<span class="search"><input id="q" type="search" placeholder="Search (key, summary, type…)  /" title="Key, summary, assignee, epic, labels, type, status, priority — every word must match. Keywords: type:bug status:&quot;in progress&quot; label:back priority:high epic:login @name @me @none; a leading - excludes (-label:back)" value="${escapeHtml(state.q)}" aria-label="Search">` +
     (board ? `<span class="count">${countText(board)}</span>` : "") + `</span>`;
 }
 
@@ -1417,11 +1417,76 @@ function visibleIssues(board) {
     f,
     board
   ));
-  const words = normalize(state.q).split(/\s+/).filter(Boolean);
+  const terms = parseSearch(state.q);
   const labels = [...state.labels];
   return board.issues.filter(issue =>
-    active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && (!words.length || words.every(w => haystack(issue, board).includes(w)))
+    active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
+      issue,
+      board,
+      term
+    ))
   );
+}
+
+// Search keywords, each matched on one field only (accents and case ignored, part of a word is enough).
+const SEARCH_FIELDS = {
+  type: (issue, board) => [board.types[issue.typeId]?.name],
+  status: (issue, board) => [board.statuses[issue.statusId]?.name],
+  priority: (issue, board) => [board.priorities[issue.priorityId]?.name],
+  label: issue => issue.labels ?? [],
+  epic: (issue, board) => [board.epics[issue.epicId]?.text, board.epics[issue.epicId]?.key],
+  assignee: issue => [issue.assignee, issue.assigneeName, issue.assignee && firstName(issue.assignee, issue.assigneeName)],
+};
+const SEARCH_ALIASES = { prio: "priority", labels: "label", who: "assignee" };
+// [-][field:]("quoted value"|word); an unclosed quote runs to the end, as the value is still being typed.
+const SEARCH_TERM = /(-?)(?:([a-z]+):)?(?:"([^"]*)"?|(\S+))/gi;
+
+// "-label:back @alice "in progress"" → [{negate, field, value}]. An unknown prefix ("http:", "ABC:")
+// stays a plain word.
+function parseSearch(query) {
+  const terms = [];
+  for (const [, minus, prefix, quoted, bare] of query.matchAll(SEARCH_TERM)) {
+    let field = prefix && searchField(prefix);
+    let value = quoted ?? bare;
+    // "type:" alone: a keyword still being typed filters nothing yet.
+    if (!prefix && /^[a-z]+:$/i.test(value) && SEARCH_FIELDS[searchField(value.slice(0, -1))]) continue;
+    if (field && !SEARCH_FIELDS[field]) {
+      value = `${prefix}:${value}`;
+      field = null;
+    }
+    if (!field && quoted === undefined && value.length > 1 && value.startsWith("@")) {
+      field = "assignee";
+      value = value.slice(1);
+    }
+    value = normalize(value).trim();
+    if (value && value !== "-") terms.push({ negate: !!minus, field, value });
+  }
+  return terms;
+}
+
+const searchField = prefix => SEARCH_ALIASES[prefix.toLowerCase()] ?? prefix.toLowerCase();
+
+function matchesTerm(
+  issue,
+  board,
+  term
+) {
+  return matchesValue(
+    issue,
+    board,
+    term
+  ) !== term.negate;
+}
+
+function matchesValue(
+  issue,
+  board,
+  { field, value }
+) {
+  if (!field) return haystack(issue, board).includes(value);
+  if (field === "assignee" && value === "me") return !!issue.assignee && issue.assignee.toLowerCase() === state.meta?.me?.toLowerCase();
+  if (field === "assignee" && value === "none") return !issue.assignee;
+  return SEARCH_FIELDS[field](issue, board).some(text => text && normalize(text).includes(value));
 }
 
 function filterPredicate(
