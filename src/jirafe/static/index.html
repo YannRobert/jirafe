@@ -130,18 +130,28 @@ try {
     background: var(--column); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
   }
   .load-panel[hidden] { display: none; }
-  /* Stand-up: one person at a time, their cards on the board and what changed on them since yesterday. */
+  /* Stand-up: whoever speaks hands over to anyone; the board shows the cards of the person speaking and what
+     changed on them since yesterday, and the row of people tells who already spoke. */
   .standup { margin: 0 1.2rem 0.6rem; padding: 0.5rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.5rem; background: var(--column); }
   .standup[hidden] { display: none; }
   .standup .who { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
   .standup .who .name { font-size: 1.15rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.45rem; }
-  .standup .who .avatar { width: 1.8rem; height: 1.8rem; }
-  .standup .who .meta, .standup .who .position { color: var(--muted); font-size: 0.85rem; }
+  .standup .who .name .avatar { width: 1.8rem; height: 1.8rem; }
+  .standup .who .meta { color: var(--muted); font-size: 0.85rem; }
   .standup .who .spacer { flex: 1; }
+  .standup .who input { border: 1px solid var(--border); border-radius: 4px; background: var(--bg); color: var(--text); font: inherit; font-size: 0.85rem; padding: 0.2rem 0.5rem; width: 14rem; }
   .standup .who button { border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--text); cursor: pointer; font: inherit; font-size: 0.85rem; padding: 0.15rem 0.55rem; }
-  .standup .who button:hover:not(:disabled) { border-color: var(--accent); }
-  .standup .who button:disabled { opacity: 0.4; cursor: default; }
+  .standup .who button:hover { border-color: var(--accent); }
+  .standup .who button.done { color: var(--accent-fg); background: var(--accent); border-color: var(--accent); }
+  .standup .people { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.45rem; }
+  .standup .people button { display: inline-flex; align-items: center; gap: 0.35rem; border: 1px solid var(--border); border-radius: 1rem; background: none; color: var(--text); cursor: pointer; font: inherit; font-size: 0.82rem; padding: 0.1rem 0.6rem 0.1rem 0.15rem; }
+  .standup .people button:hover { border-color: var(--accent); }
+  .standup .people button.current { background: var(--selected); border-color: var(--accent); font-weight: 600; }
+  .standup .people button.spoke { opacity: 0.45; }
+  .standup .people button.spoke .label::after { content: " ✓"; color: var(--accent); }
+  .standup .people button.match { border-color: var(--accent); box-shadow: 0 0 0 1px var(--accent); }
   .standup .changes { margin-top: 0.45rem; max-height: 28vh; overflow-y: auto; font-size: 0.82rem; }
+  .standup .changes[hidden] { display: none; }
   .standup .changes > p { margin: 0; color: var(--muted); }
   /* Actions on the picked cards: in the flow under the filters rather than floating, so that it never covers
      the detail, docked on the side or at the bottom. */
@@ -666,7 +676,7 @@ try {
   <div class="view">
     <span class="views" id="views" role="group" aria-label="Board view"></span>
     <button type="button" class="icon-btn clear" id="clear-filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 4.5 H17.5 L11.8 11.3 V17 L8.2 18.8 V11.3 Z"/><path d="M15.5 15.5 L21 21 M21 15.5 L15.5 21"/></svg></button>
-    <button type="button" class="icon-btn standup-btn" id="standup-toggle" aria-pressed="false" title="Stand-up: one person after the other (S)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20 c0-3.6 2.7-6 6-6 s6 2.4 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.1 c2.6 0.2 4.5 2.4 4.5 5.4"/></svg></button>
+    <button type="button" class="icon-btn standup-btn" id="standup-toggle" aria-pressed="false" title="Stand-up: each one's cards in turn, in the order the floor goes (S)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20 c0-3.6 2.7-6 6-6 s6 2.4 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.1 c2.6 0.2 4.5 2.4 4.5 5.4"/></svg></button>
     <span class="divider" aria-hidden="true"></span>
     <button type="button" class="icon-btn notify" id="notify" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5 V11 a6 6 0 0 1 12 0 V16.5 L19.5 18 H4.5 Z"/><path d="M10 21 h4"/><path class="slash" d="M4 3 L20 21"/></svg></button>
     <button type="button" class="icon-btn" id="theme"></button>
@@ -838,7 +848,8 @@ const state = {
   // Start of the current visit (epoch ms), and what changed since then: GET /activity, from the local copy.
   visitSince: null,
   activity: [],
-  // Stand-up mode: {people: [login, …, null for unassigned], index, since, activity}, or null.
+  // Stand-up mode: {people: [login, …, null for unassigned], index of the person speaking or null, spoke: a
+  // Set of indexes, since, activity}, or null.
   standup: null,
   notify: readPreference(NOTIFY_KEY) === "true" && window.Notification?.permission === "granted",
   meta: null,
@@ -1506,15 +1517,17 @@ function setView(view) {
 
 // Quick filters add up (AND), as in Jira.
 function visibleIssues(board) {
-  const standup = state.standup;
-  const active = (state.meta?.quickFilters ?? []).filter(f => state.quick.has(f.id) && !(standup && isPersonFilter(f.id))).map(f => filterPredicate(
+  // Nobody speaking yet (or any more): the stand-up shows the whole board.
+  const speaking = state.standup?.index ?? null;
+  const speaker = speaking === null ? undefined : state.standup.people[speaking];
+  const active = (state.meta?.quickFilters ?? []).filter(f => state.quick.has(f.id) && !(speaker !== undefined && isPersonFilter(f.id))).map(f => filterPredicate(
     f,
     board
   ));
   const terms = parseSearch(state.q);
   const labels = [...state.labels];
   return board.issues.filter(issue =>
-    (!standup || (issue.assignee ?? null) === standup.people[standup.index]) && active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
+    (speaker === undefined || (issue.assignee ?? null) === speaker) && active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
       issue,
       board,
       term
@@ -2169,6 +2182,20 @@ function standupPeople(board) {
   return board.issues.some(issue => !issue.assignee) ? [...people, null] : people;
 }
 
+// Name and avatar of a person of the round, from one of their issues.
+function standupPerson(
+  board,
+  login
+) {
+  const issue = board.issues.find(i => (i.assignee ?? null) === login);
+  return {
+    login,
+    name: issue?.assigneeName ?? login,
+    first: login ? firstName(login, issue?.assigneeName) : "Unassigned",
+    avatar: issue?.avatar,
+  };
+}
+
 function toggleStandup() {
   if (state.standup) {
     endStandup();
@@ -2177,10 +2204,19 @@ function toggleStandup() {
   const board = currentBoard();
   if (!board) return;
   const since = standupSince();
-  state.standup = { people: standupPeople(board), index: 0, since, activity: [] };
+  state.standup = { people: standupPeople(board), index: null, spoke: new Set(), since, activity: [] };
   closeDetail();
   clearPicked();
+  // Built once: the board renders again at every sync, and the field must keep what is being typed.
+  $("standup").innerHTML = `<div class="who"><span class="name" id="standup-current"></span><span class="meta" id="standup-meta"></span>` +
+    `<span class="spacer"></span>` +
+    `<input type="text" id="standup-query" autocomplete="off" spellcheck="false" placeholder="Next: type a name, Enter" ` +
+    `aria-label="Who speaks next" title="Enter alone: someone who has not spoken yet">` +
+    `<button type="button" id="standup-end" title="Back to the whole board (S, or Escape twice)">End stand-up</button></div>` +
+    `<div class="people" id="standup-people" role="toolbar" aria-label="Participants"></div>` +
+    `<div class="changes" id="standup-changes" hidden></div>`;
   renderBoard();
+  $("standup-query").focus();
   request(
     `/activity?since=${since}`,
     { timeout: LOCAL_TIMEOUT_MS }
@@ -2196,14 +2232,46 @@ function endStandup() {
   renderBoard();
 }
 
-function stepStandup(step) {
+// The floor goes to that person (null: nobody, the whole board); whoever had it has spoken.
+function giveFloor(index) {
   const standup = state.standup;
-  const index = standup.index + step;
-  if (index < 0 || index >= standup.people.length) return;
+  if (standup.index !== null) standup.spoke.add(standup.index);
   standup.index = index;
+  if (index !== null) standup.spoke.delete(index);
+  const query = $("standup-query");
+  query.value = "";
   closeDetail();
   clearPicked();
   renderBoard();
+  query.focus({ preventScroll: true });
+}
+
+// Nobody named: the next one in the row who has not spoken yet, and nobody once everyone has.
+function nextSpeaker() {
+  const { people, index, spoke } = state.standup;
+  const count = people.length;
+  const from = index ?? -1;
+  for (let step = 1; step <= count; step++) {
+    const candidate = (from + step) % count;
+    if (candidate !== index && !spoke.has(candidate)) {
+      giveFloor(candidate);
+      return;
+    }
+  }
+  giveFloor(null);
+}
+
+// The people whose first name starts with what is typed, else whose name or login contains it.
+function standupMatches(query) {
+  const typed = normalize(query.trim());
+  if (!typed) return [];
+  const board = currentBoard();
+  const people = state.standup.people.map((login, index) => ({ index, ...standupPerson(
+    board,
+    login
+  ) }));
+  const starts = people.filter(p => normalize(p.first).startsWith(typed));
+  return starts.length ? starts.map(p => p.index) : people.filter(p => normalize(`${p.first} ${p.name} ${p.login ?? ""}`).includes(typed)).map(p => p.index);
 }
 
 function renderStandup() {
@@ -2212,33 +2280,79 @@ function renderStandup() {
   $("standup").hidden = !standup;
   const board = currentBoard();
   if (!standup || !board) return;
-  const login = standup.people[standup.index];
-  const issues = visibleIssues(board);
-  const sample = board.issues.find(issue => (issue.assignee ?? null) === login);
-  const points = issues.reduce((sum, issue) => sum + (issue.points ?? 0), 0);
-  const keys = new Set(issues.map(issue => issue.key));
+  const { people, index, spoke } = standup;
+  const left = people.filter((_, i) => i !== index && !spoke.has(i)).length;
+  const matches = new Set(standupMatches($("standup-query").value));
+  let current = "";
+  let meta = "";
+  if (index !== null) {
+    const person = standupPerson(
+      board,
+      people[index]
+    );
+    const issues = visibleIssues(board);
+    const points = issues.reduce((sum, issue) => sum + (issue.points ?? 0), 0);
+    current = `${avatar(person.login, person.name, person.avatar)}${escapeHtml(person.first)}`;
+    meta = `${issues.length} issue${issues.length === 1 ? "" : "s"}${points ? ` · ${formatPoints(points)} pts` : ""} · `;
+  } else {
+    current = escapeHtml(spoke.size ? "Everyone spoke" : "Who starts?");
+  }
+  meta += left ? `${left} left` : index === null ? "" : "last one";
+  $("standup-current").innerHTML = current;
+  $("standup-meta").textContent = meta;
+  $("standup-end").classList.toggle("done", index === null && spoke.size > 0);
+  const row = people.map((login, i) => {
+    const person = standupPerson(
+      board,
+      login
+    );
+    const classes = [i === index ? "current" : "", spoke.has(i) ? "spoke" : "", matches.has(i) ? "match" : ""].filter(Boolean).join(" ");
+    return `<button type="button" data-speaker="${i}" class="${classes}" aria-pressed="${i === index}"` +
+      ` title="${escapeHtml(person.login ? person.name : "Unassigned issues")}${spoke.has(i) ? " (spoke)" : ""}">` +
+      `${avatar(person.login, person.name, person.avatar)}<span class="label">${escapeHtml(person.first)}</span></button>`;
+  }).join("");
+  // Rebuilt only when it changes: a sync must not swallow a click on a person.
+  const peopleEl = $("standup-people");
+  if (peopleEl.dataset.html !== row) {
+    peopleEl.dataset.html = row;
+    peopleEl.innerHTML = row;
+  }
+  const changesEl = $("standup-changes");
+  changesEl.hidden = index === null;
+  if (index === null) return;
+  const keys = new Set(visibleIssues(board).map(issue => issue.key));
   const changed = standup.activity.filter(issue => keys.has(issue.key));
-  const last = standup.index === standup.people.length - 1;
-  $("standup").innerHTML = `<div class="who">` +
-    `<button type="button" data-standup="-1" title="Previous person (P)"${standup.index ? "" : " disabled"}>‹</button>` +
-    `<span class="name">${avatar(login, sample?.assigneeName, sample?.avatar)}${escapeHtml(login ? firstName(login, sample?.assigneeName) : "Unassigned")}</span>` +
-    `<span class="meta">${issues.length} issue${issues.length === 1 ? "" : "s"}${points ? ` · ${formatPoints(points)} pts` : ""}</span>` +
-    `<span class="position">${standup.index + 1} / ${standup.people.length}</span>` +
-    `<button type="button" data-standup="1" title="Next person (N)"${last ? " disabled" : ""}>›</button>` +
-    `<span class="spacer"></span>` +
-    `<button type="button" data-standup="end" title="Back to the whole board (S or Escape)">End stand-up</button></div>` +
-    `<div class="changes">${changed.length
-      ? activityHtml(changed)
-      : `<p>No column move, assignment or comment on these issues since ${escapeHtml(formatSince(standup.since))}.</p>`}</div>`;
+  changesEl.innerHTML = changed.length
+    ? activityHtml(changed)
+    : `<p>No column move, assignment or comment on these issues since ${escapeHtml(formatSince(standup.since))}.</p>`;
 }
 
 $("standup-toggle").addEventListener("click", toggleStandup);
 $("standup").addEventListener("click", e => {
-  const step = e.target.closest("[data-standup]")?.dataset.standup;
-  if (step === "end") endStandup();
-  else if (step) stepStandup(Number(step));
+  if (e.target.closest("#standup-end")) {
+    endStandup();
+    return;
+  }
+  const speaker = e.target.closest("[data-speaker]");
+  if (speaker) {
+    giveFloor(Number(speaker.dataset.speaker));
+    return;
+  }
   const issue = e.target.closest("[data-open]");
   if (issue) openDetail(issue.dataset.open);
+});
+$("standup").addEventListener("input", e => {
+  if (e.target.id === "standup-query") renderStandup();
+});
+$("standup").addEventListener("keydown", e => {
+  if (e.target.id !== "standup-query" || e.key !== "Enter") return;
+  e.preventDefault();
+  if (!e.target.value.trim()) {
+    nextSpeaker();
+    return;
+  }
+  const [first] = standupMatches(e.target.value);
+  if (first !== undefined) giveFloor(first);
 });
 
 // ---------- Since the last visit ----------
@@ -3748,11 +3862,8 @@ document.addEventListener("keydown", e => {
     $("q")?.focus();
   } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "s") {
     toggleStandup();
-  } else if (state.standup && !e.ctrlKey && !e.metaKey && !e.altKey && ["n", "p"].includes(e.key.toLowerCase())) {
-    stepStandup(e.key.toLowerCase() === "n" ? 1 : -1);
-  } else if (state.standup && !state.openKey && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
-    e.preventDefault();
-    stepStandup(e.key === "ArrowRight" ? 1 : -1);
+  } else if (state.standup && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "n") {
+    nextSpeaker();
   } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "d") {
     toggleDock();
   } else if (state.openKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") {
