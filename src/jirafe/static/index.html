@@ -245,6 +245,13 @@ try {
   }
   .icon-btn.clear:not(:disabled) { color: var(--accent); }
   .icon-btn.clear:disabled { opacity: 0.35; cursor: default; background: none; }
+  .icon-btn.notify { display: inline-flex; padding: 0.3rem 0.4rem; }
+  .icon-btn.notify svg {
+    width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 1.8;
+    stroke-linecap: round; stroke-linejoin: round;
+  }
+  .icon-btn.notify[aria-pressed="true"] { color: var(--accent); }
+  .icon-btn.notify[aria-pressed="true"] .slash { display: none; }
 
   main { flex: 1; min-height: 0; overflow: auto; padding: 0 1.2rem 1rem; }
   .board { display: grid; grid-template-columns: repeat(var(--cols, 10), minmax(12.5rem, 1fr)); gap: 0.5rem; min-height: 100%; }
@@ -607,6 +614,7 @@ try {
     <span class="views" id="views" role="group" aria-label="Board view"></span>
     <button type="button" class="icon-btn clear" id="clear-filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 4.5 H17.5 L11.8 11.3 V17 L8.2 18.8 V11.3 Z"/><path d="M15.5 15.5 L21 21 M21 15.5 L15.5 21"/></svg></button>
     <span class="divider" aria-hidden="true"></span>
+    <button type="button" class="icon-btn notify" id="notify" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5 V11 a6 6 0 0 1 12 0 V16.5 L19.5 18 H4.5 Z"/><path d="M10 21 h4"/><path class="slash" d="M4 3 L20 21"/></svg></button>
     <button type="button" class="icon-btn" id="theme"></button>
   </div>
   <span class="spacer"></span>
@@ -691,6 +699,14 @@ const CHANGES_POLL_MS = 15 * 1000;
 const LOCAL_TIMEOUT_MS = 5 * 1000;
 const JIRA_READ_TIMEOUT_MS = 45 * 1000;
 const WRITE_TIMEOUT_MS = 2 * 60 * 1000;
+// Notifications when someone else changes one of my issues. A hidden page keeps asking /changes, with
+// watch=0: the server's sync does not speed up for a page nobody looks at, so a change then takes up to
+// --sync-interval (5 min) to show.
+const NOTIFY_KEY = "sprint-board.notify";
+// Jira's "updated" date is the time of the last change: a history entry or comment further from it is
+// not the change that was found (a work log, for instance), and its author cannot be told.
+const NOTIFY_MATCH_MS = 60 * 1000;
+const NOTIFY_TEXT_LENGTH = 160;
 const ERROR_FLASH_MS = 8000;
 const INFO_FLASH_MS = 2500;
 const DETAIL_CACHE_SIZE = 80;
@@ -751,6 +767,10 @@ const params = new URLSearchParams(location.search);
 const state = {
   // Issues changed in Jira lately, {key: epoch milliseconds}, as GET /changes lists them.
   recent: {},
+  // The last /changes answer compared, null until the first: what changed before the page opened is
+  // not news.
+  seenChanges: null,
+  notify: readPreference(NOTIFY_KEY) === "true" && window.Notification?.permission === "granted",
   meta: null,
   boards: {},
   defaultSprint: null,
@@ -1863,8 +1883,11 @@ async function syncDetail(
 // An issue of the sprint changed in Jira after the board was loaded (by someone else, or in another
 // browser): the board is reloaded, once for all tabs thanks to the shared refresh.
 async function watchChanges() {
-  if (document.hidden) return;
-  const { changedAt } = await pollChanges() ?? {};
+  if (document.hidden) {
+    if (state.notify) await pollChanges(false);
+    return;
+  }
+  const { changedAt } = await pollChanges(true) ?? {};
   reloadOpenDetail();
   const board = currentBoard();
   if (!changedAt || !board || board.at >= changedAt || !state.autoRefresh || drag?.started || state.refreshing) return;
@@ -1873,18 +1896,113 @@ async function watchChanges() {
 
 // The poll that tells whether the server is still there: /changes never waits for Jira, so no answer
 // within LOCAL_TIMEOUT_MS means it is down.
-async function pollChanges() {
+async function pollChanges(watching) {
   const changes = await request(
-    "/changes",
+    watching ? "/changes" : "/changes?watch=0",
     { timeout: LOCAL_TIMEOUT_MS }
   ).then(response => response.json()).catch(() => null);
   setServerReachable(changes !== null);
   if (changes?.recent) {
     state.recent = changes.recent;
     markRecent();
+    notifyChanges(changes.recent);
   }
   return changes;
 }
+
+// ---------- Notifications ----------
+
+function notifyChanges(recent) {
+  const previous = state.seenChanges;
+  state.seenChanges = recent;
+  if (!previous || !state.notify) return;
+  for (const [key, at] of Object.entries(recent)) {
+    if (at > (previous[key] ?? 0)) notifyIfMine(
+      key,
+      at
+    );
+  }
+}
+
+// Read from the local copy, which the sync has just written: no Jira request. My own changes (from this
+// page or from Jira) are not news.
+async function notifyIfMine(
+  key,
+  at
+) {
+  const entry = await fetchIssue(
+    key,
+    "local"
+  ).catch(() => null);
+  const fields = entry?.data?.fields;
+  const me = state.meta?.me?.toLowerCase();
+  if (!fields || !me || fields.assignee?.name?.toLowerCase() !== me) return;
+  const change = lastChange(
+    entry.data,
+    at
+  );
+  if (!change || change.author?.name?.toLowerCase() === me) return;
+  const notification = new Notification(
+    `${key} ${fields.summary ?? ""}`,
+    // The tag: several open tabs show a change once.
+    { body: change.text, tag: `${key}@${at}` }
+  );
+  notification.onclick = () => {
+    window.focus();
+    openDetail(key);
+    notification.close();
+  };
+}
+
+// The history entry or comment that made the issue's "updated" date, described in one line.
+function lastChange(
+  data,
+  at
+) {
+  const history = data.changelog?.histories?.at(-1);
+  const comment = data.fields.comment?.comments?.at(-1);
+  const near = item => item && Math.abs(Date.parse(item.created) - at) <= NOTIFY_MATCH_MS;
+  const shorten = text => text.length > NOTIFY_TEXT_LENGTH ? `${text.slice(0, NOTIFY_TEXT_LENGTH - 1)}…` : text;
+  const who = user => user?.displayName ?? user?.name ?? "Someone";
+  if (near(comment) && (!near(history) || Date.parse(comment.created) >= Date.parse(history.created))) {
+    return { author: comment.author, text: shorten(`${who(comment.author)} commented: ${comment.body.replace(/\s+/g, " ")}`) };
+  }
+  if (!near(history)) return null;
+  const items = history.items.map(item => {
+    const field = HISTORY_FIELDS[item.field] ?? item.field;
+    const from = item.from ?? "";
+    const to = item.to ?? "";
+    if (from.length > HISTORY_LONG_VALUE || to.length > HISTORY_LONG_VALUE) return `${field} changed`;
+    return !from ? `${field}: ${to}` : !to ? `${field}: ${from} removed` : `${field}: ${from} → ${to}`;
+  });
+  return { author: history.author, text: shorten(`${who(history.author)} — ${items.join(", ")}`) };
+}
+
+async function toggleNotify() {
+  if (!window.Notification) {
+    flashError("This browser cannot show notifications");
+    return;
+  }
+  if (!state.notify && Notification.permission !== "granted" && await Notification.requestPermission() !== "granted") {
+    flashError("Notifications are blocked for this page: allow them in the browser's site settings");
+    return;
+  }
+  state.notify = !state.notify;
+  savePreference(
+    NOTIFY_KEY,
+    String(state.notify)
+  );
+  renderNotifyButton();
+}
+
+function renderNotifyButton() {
+  $("notify").setAttribute("aria-pressed", String(state.notify));
+  $("notify").title = state.notify
+    ? "Notifying you when someone changes one of your issues — click to stop"
+    : "Notify me when someone changes one of my issues (status, comment, assignment)";
+}
+
+$("notify").addEventListener("click", toggleNotify);
 
 // At each poll rather than at each render: a card stops shining once its change gets old, without redrawing
 // the board.
@@ -3451,7 +3569,7 @@ setInterval(renderStatus, 15 * 1000);
 setInterval(refreshLoad, LOAD_REFRESH_MS);
 setInterval(watchChanges, CHANGES_POLL_MS);
 // Without waiting for the first poll: the cards to look at are marked from the first render.
-pollChanges();
+pollChanges(!document.hidden);
 $("panel-sync").addEventListener("click", e => {
   if (e.target.closest(".resync") && state.openKey) syncDetail(
     state.openKey,
@@ -3461,6 +3579,7 @@ $("panel-sync").addEventListener("click", e => {
 
 // Saved data: shown right away, then refreshed behind the scenes if it has aged.
 renderThemeButton();
+renderNotifyButton();
 $("autoRefresh").checked = state.autoRefresh;
 $("auto-refresh-label").title = `Reloads the data every ${AUTO_REFRESH_MS / 60000} minutes`;
 adoptNewerSnapshot();

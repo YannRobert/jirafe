@@ -167,7 +167,7 @@ browser ──► http://localhost:8766 ──► Jira
 | `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
 | `PUT /transition` | brings an issue to a status, through the transitions of the path |
 | `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
-| `GET /changes` | when the background sync last found a changed issue, and the recently changed issues; tells the server a page is watching |
+| `GET /changes` | when the background sync last found a changed issue, and the recently changed issues; tells the server a page is watching, unless `?watch=0` |
 | `GET /mirror/status` | state of the local copy |
 
 - **Board in one call**: `allData.json`, the endpoint used by Jira's own board page.
@@ -176,6 +176,10 @@ browser ──► http://localhost:8766 ──► Jira
   address Jira can reach), so it is asked: every 5 minutes, and every 30 seconds while a page is visible,
   with a light search (modification dates only) followed by the full fetch of the issues that changed.
   A change made elsewhere then reaches the open detail and the board within about 45 seconds.
+- **Notifications** (bell in the header): when someone else changes an issue assigned to you, the
+  browser shows what changed (status, comment, assignment…), read from the local copy at no Jira cost. A
+  hidden tab keeps asking `/changes?watch=0`, which does not speed up the sync: the notification then
+  comes with the next regular pass, within `--sync-interval`.
 - **Server stopped**: every request from the page has a deadline (a stopped server is not always
   refused: behind WSL's port forwarding, the connection just hangs). When `/changes` stops answering, a
   banner says so and the board keeps showing the last data; it goes away once the server is back.

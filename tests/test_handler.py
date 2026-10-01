@@ -424,6 +424,13 @@ class HandlerTest(unittest.TestCase):
         status, body = self.call("GET", "/changes")
         self.assertEqual(json.loads(body)["changedAt"], 1_700_000_000_500)
 
+    def test_changes_without_watching(self):
+        status, body = self.call("GET", "/changes?watch=0")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"changedAt": None, "recent": {}})
+        self.assertFalse(self.mirror.watched())
+        self.assertEqual(self.upstream.requests, [])
+
     def test_changes_lists_the_recently_updated_issues(self):
         with mock.patch.object(
             self.mirror,

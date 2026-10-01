@@ -104,9 +104,12 @@ def make_handler(
                 )
             elif self.path == "/mirror/status":
                 self.send_json(200, mirror.status())
-            elif self.path == "/changes":
+            elif urlsplit(self.path).path == "/changes":
                 # Asked by the page while it is visible: it is also what tells the mirror someone is watching.
-                mirror.watch()
+                # A hidden page waiting for notifications says watch=0: it reads what the regular passes
+                # find, without making them more frequent.
+                if parse_qs(urlsplit(self.path).query).get("watch") != ["0"]:
+                    mirror.watch()
                 self.send_json(
                     200,
                     {
