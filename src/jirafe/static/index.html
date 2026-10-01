@@ -141,6 +141,14 @@ try {
   .standup .who button:disabled { opacity: 0.4; cursor: default; }
   .standup .changes { margin-top: 0.45rem; max-height: 28vh; overflow-y: auto; font-size: 0.82rem; }
   .standup .changes > p { margin: 0; color: var(--muted); }
+  /* Actions on the picked cards: in the flow under the filters rather than floating, so that it never covers
+     the detail, docked on the side or at the bottom. */
+  .bulk { display: flex; align-items: center; gap: 0.6rem; flex-wrap: wrap; margin: 0 1.2rem 0.6rem; padding: 0.4rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.5rem; background: var(--selected); font-size: 0.85rem; }
+  .bulk[hidden] { display: none; }
+  .bulk .count { font-weight: 600; }
+  .bulk select, .bulk button { border: 1px solid var(--border); border-radius: 4px; background: var(--column); color: var(--text); font: inherit; padding: 0.15rem 0.45rem; cursor: pointer; }
+  .bulk select:disabled, .bulk button:disabled { opacity: 0.5; cursor: default; }
+  .bulk .busy { color: var(--muted); }
   /* What changed since the last visit: hidden while there is nothing new. */
   .activity { position: relative; }
   .activity[hidden] { display: none; }
@@ -584,6 +592,11 @@ try {
   .move-dialog li.target::before { background: var(--accent); box-shadow: 0 0 0 3px var(--selected); }
   .move-dialog li .transition { color: var(--faint); font-size: 0.8rem; }
   .move-dialog li:first-child .transition { font-style: italic; }
+  /* Several issues rather than the statuses of one: a plain list, without the timeline. */
+  .move-dialog ol.issues li { padding-left: 0; flex-wrap: wrap; gap: 0.4rem; }
+  .move-dialog ol.issues li::before, .move-dialog ol.issues li::after { content: none; }
+  .move-dialog ol.issues .key { font-weight: 600; }
+  .move-dialog ol.issues .skipped { color: var(--faint); font-size: 0.8rem; }
   .move-dialog .note { margin: 0 0 1.2rem; color: var(--faint); font-size: 0.8rem; line-height: 1.35; }
   .move-dialog .actions { display: flex; justify-content: flex-end; gap: 0.6rem; }
   .move-dialog .actions .btn { padding: 0.45rem 1rem; font-size: 0.9rem; }
@@ -671,6 +684,7 @@ try {
 </header>
 <div class="filters" id="filters"></div>
 <div class="standup" id="standup" hidden></div>
+<div class="bulk" id="bulk" role="toolbar" aria-label="Picked issues" hidden></div>
 <div class="error-banner" id="offline" role="alert" hidden>The Jirafe server does not answer: the board shows the last data received. Start it again (<code>start.sh</code>, <code>jirafe.sh</code> or <code>jirafe.cmd</code>); the page reconnects by itself.</div>
 <div id="errors"></div>
 <main><div class="board" id="board"><div class="skeleton">Loading the board…</div></div></main>
@@ -696,7 +710,7 @@ try {
     <h2 id="move-title"></h2>
     <p class="summary" id="move-summary"></p>
     <ol id="move-steps"></ol>
-    <p class="note">Each transition shows in the issue's history, and may notify people, as it would in Jira.</p>
+    <p class="note" id="move-note"></p>
     <div class="actions">
       <button class="btn" value="cancel">Cancel</button>
       <button class="btn primary" value="move" id="move-confirm">Move</button>
@@ -835,6 +849,8 @@ const state = {
   openKey: null,
   // Issues picked with Ctrl + click, besides the open one: Ctrl+C copies them all.
   picked: new Set(),
+  // A bulk assignment or move running: the bar waits for it before taking another one.
+  bulkBusy: false,
   // Where a Shift + click range starts: the last issue opened or picked with Ctrl + click.
   pickAnchor: null,
   detailSyncing: null,
@@ -1605,6 +1621,7 @@ function renderBoard() {
   );
   renderClearFilters();
   renderStandup();
+  renderBulk();
   // The count follows the view and the search, which only redraw the board, not the filter bar.
   const count = document.querySelector(".filters .count");
   if (count) count.textContent = countText(board);
@@ -1961,6 +1978,170 @@ async function pollChanges(watching) {
   }
   return changes;
 }
+
+// ---------- Bulk actions ----------
+
+// The picked issues of the sprint shown, in board order; a pick left in another sprint does not count.
+function pickedIssues() {
+  return (currentBoard()?.issues ?? []).filter(issue => state.picked.has(issue.key));
+}
+
+function renderBulk() {
+  const bar = $("bulk");
+  const issues = pickedIssues();
+  bar.hidden = !issues.length;
+  if (!issues.length) return;
+  const board = currentBoard();
+  // People offered: those the page already knows (no Jira search for several issues at once). Kept with the
+  // bar, so that the option chosen is the person it showed.
+  const people = knownPeople(state.openKey);
+  const disabled = state.bulkBusy ? " disabled" : "";
+  const html = `<span class="count">${issues.length === 1 ? "1 issue" : `${issues.length} issues`} picked</span>` +
+    `<select id="bulk-assign" aria-label="Assign the picked issues"${disabled}><option value="">Assign to…</option>` +
+    `<option value="-1">Unassigned</option>` +
+    people.map((p, index) => `<option value="${index}">${escapeHtml(p.name)}</option>`).join("") + `</select>` +
+    `<select id="bulk-move" aria-label="Move the picked issues"${disabled}><option value="">Move to…</option>` +
+    board.columns.map((c, index) => `<option value="${index}">${escapeHtml(c.name)}</option>`).join("") + `</select>` +
+    (state.bulkBusy ? `<span class="busy">${escapeHtml(state.bulkBusy)}</span>` : "") +
+    `<button type="button" id="bulk-clear" title="Unpick every card (Escape)"${disabled}>Clear</button>`;
+  // The board renders again at every sync: rebuilding the bar each time would close a list being opened.
+  if (html === bar.dataset.html) return;
+  bar.dataset.html = html;
+  bar.innerHTML = html;
+  bar.people = people;
+}
+
+// The move dialog, listing the issues instead of the statuses of one.
+function confirmBulk(
+  title,
+  rows,
+  confirmLabel
+) {
+  const dialog = $("move-dialog");
+  $("move-title").textContent = title;
+  $("move-summary").textContent = "";
+  $("move-note").textContent = "Each issue is changed in turn, as it would be in Jira: it shows in its history, and may notify people.";
+  $("move-confirm").textContent = confirmLabel;
+  $("move-steps").className = "issues";
+  $("move-steps").innerHTML = rows.join("");
+  dialog.returnValue = "cancel";
+  dialog.showModal();
+  $("move-confirm").focus();
+  return new Promise(resolve => dialog.addEventListener(
+    "close",
+    () => resolve(dialog.returnValue === "move"),
+    { once: true }
+  ));
+}
+
+function bulkRow(
+  issue,
+  detail
+) {
+  return `<li><span class="key">${escapeHtml(issue.key)}</span><span>${escapeHtml(issue.summary ?? "")}</span>${detail}</li>`;
+}
+
+function setBulkBusy(message) {
+  state.bulkBusy = message;
+  renderBulk();
+}
+
+async function bulkAssign(user) {
+  const login = (user?.login ?? "").toLowerCase();
+  const issues = pickedIssues().filter(issue => (issue.assignee ?? "").toLowerCase() !== login);
+  const name = user?.name ?? "nobody";
+  if (!issues.length) {
+    flashInfo(`Already assigned to ${name}`);
+    return;
+  }
+  const plural = issues.length === 1 ? "1 issue" : `${issues.length} issues`;
+  if (!await confirmBulk(
+    `Assign ${plural} to ${name}`,
+    issues.map(issue => bulkRow(
+      issue,
+      ""
+    )),
+    "Assign"
+  )) return;
+  setBulkBusy("Assigning…");
+  let done = 0;
+  // One after the other: a burst of writes would gain little, and a refusal stays easy to read.
+  for (const issue of issues) {
+    if (await assignIssue(
+      issue.key,
+      user
+    )) done++;
+  }
+  setBulkBusy(false);
+  if (done) flashInfo(`${done === 1 ? "1 issue" : `${done} issues`} assigned to ${name}`);
+}
+
+async function bulkMove(column) {
+  const board = currentBoard();
+  const target = board.columns[column];
+  const issues = pickedIssues().filter(issue => !target.statusIds.some(id => String(id) === String(issue.statusId)));
+  if (!issues.length) {
+    flashInfo(`Already in ${target.name}`);
+    return;
+  }
+  // The same read as a drag, once per issue: the path depends on each one's status and workflow.
+  setBulkBusy("Checking the transitions…");
+  const plans = await Promise.all(issues.map(async issue => {
+    const transitions = await loadTransitions(issue.key).promise;
+    const route = transitions.error ? null : routeTo(
+      transitions,
+      column
+    );
+    return { issue, transitions, route };
+  }));
+  setBulkBusy(false);
+  if (currentBoard() !== board) return;
+  const movable = plans.filter(plan => plan.route);
+  const pill = id => `<span class="status-pill ${escapeHtml(board.statuses[id]?.category ?? "")}">${escapeHtml(board.statuses[id]?.name ?? "")}</span>`;
+  const rows = plans.map(({ issue, transitions, route }) => bulkRow(
+    issue,
+    route
+      ? `${pill(issue.statusId)} → ${pill(route.statusId)}${route.steps.length > 1 ? `<span class="skipped">${route.steps.length} transitions</span>` : ""}`
+      : `<span class="skipped">left as is: ${escapeHtml(transitions.error ?? "no known path leads there")}</span>`
+  ));
+  if (!movable.length) {
+    flashError(`None of the picked issues can be moved to ${target.name}`);
+    return;
+  }
+  const plural = movable.length === 1 ? "1 issue" : `${movable.length} issues`;
+  if (!await confirmBulk(
+    `Move ${plural} to ${target.name}`,
+    rows,
+    "Move"
+  )) return;
+  setBulkBusy("Moving…");
+  let done = 0;
+  for (const { issue, transitions } of movable) {
+    if (await moveIssue(
+      issue.key,
+      column,
+      null,
+      transitions,
+      true
+    )) done++;
+  }
+  setBulkBusy(false);
+  if (done) flashInfo(`${done === 1 ? "1 issue" : `${done} issues`} moved to ${target.name}`);
+}
+
+$("bulk").addEventListener("change", e => {
+  const value = e.target.value;
+  if (value === "") return;
+  if (e.target.id === "bulk-assign") {
+    bulkAssign(value === "-1" ? null : $("bulk").people[Number(value)]);
+  } else if (e.target.id === "bulk-move") {
+    bulkMove(Number(value));
+  }
+  e.target.value = "";
+});
+$("bulk").addEventListener("click", e => {
+  if (e.target.id === "bulk-clear") clearPicked();
+});
 
 // ---------- Stand-up ----------
 
@@ -2689,6 +2870,7 @@ function clearPicked() {
 
 function renderPicked() {
   for (const el of document.querySelectorAll(".card[data-key]")) el.classList.toggle("picked", state.picked.has(el.dataset.key));
+  renderBulk();
 }
 
 // The picked issues (or else the open one), in board order: one line per issue, "KEY Summary". The HTML
@@ -2953,6 +3135,9 @@ function confirmMove(
   };
   $("move-title").textContent = `Move ${issue.key} to ${columnName}`;
   $("move-summary").textContent = issue.summary ?? "";
+  $("move-note").textContent = "Each transition shows in the issue's history, and may notify people, as it would in Jira.";
+  $("move-confirm").textContent = "Move";
+  $("move-steps").className = "";
   $("move-steps").innerHTML =
     `<li>${pill(fromStatusId, "")}<span class="transition">now</span></li>` +
     route.steps.map((step, index) =>
@@ -3173,7 +3358,8 @@ async function moveIssue(
   key,
   column,
   neighbour,
-  transitions
+  transitions,
+  confirmed = false
 ) {
   const board = currentBoard();
   const issue = board.issues.find(i => i.key === key);
@@ -3214,14 +3400,14 @@ async function moveIssue(
       show(route.statusId);
       if (currentBoard() === board) renderBoard();
     }
-    if (route.steps.length > 1 && !await confirmMove(
+    if (route.steps.length > 1 && !confirmed && !await confirmMove(
       issue,
       before.statusId,
       route,
       board.columns[column].name
     )) {
       undo();
-      return;
+      return false;
     }
     const body = await write(
       "/transition",
@@ -3240,10 +3426,10 @@ async function moveIssue(
     }
     if (state.openKey === key) rerenderDetail();
     flashError(`${key} could not be moved to ${board.columns[column].name}: ${error.message}`);
-    return;
+    return false;
   }
   saveSnapshot();
-  if (!neighbour) return;
+  if (!neighbour) return true;
   try {
     await write(
       "/rank",
@@ -3252,6 +3438,7 @@ async function moveIssue(
   } catch (error) {
     flashError(`${key} was moved, but not to that place in the column: ${error.message}`);
   }
+  return true;
 }
 
 function placeIssue(
@@ -3479,11 +3666,13 @@ async function assignIssue(
     // The server resynced its copy after the write: the detail shows what Jira now holds.
     remember(body.issue);
     saveSnapshot();
+    return true;
   } catch (error) {
     if (issue) Object.assign(issue, previousIssue);
     if (previousEntry) remember(previousEntry);
     if (currentBoard() === board) renderBoard();
     flashError(`${key} could not be assigned: ${error.message}`);
+    return false;
   } finally {
     state.assigning.delete(key);
     if (state.openKey === key) rerenderDetail();
