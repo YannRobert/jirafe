@@ -3,11 +3,12 @@ import http.client
 import json
 import tempfile
 import threading
+import time
 import unittest
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
-from jirafe.constants import BASE_DETAIL_FIELDS, DEFAULT_RECENT_MINUTES
+from jirafe.constants import BASE_DETAIL_FIELDS, DEFAULT_RECENT_MINUTES, MAX_ACTIVITY_DAYS
 from jirafe.handler import make_handler, relay_allowed
 from jirafe.meter import RequestMeter
 from jirafe.mirror import IssueMirror
@@ -429,6 +430,25 @@ class HandlerTest(unittest.TestCase):
         self.assertEqual(status, 200)
         self.assertEqual(json.loads(body), {"changedAt": None, "recent": {}})
         self.assertFalse(self.mirror.watched())
+        self.assertEqual(self.upstream.requests, [])
+
+    def test_activity_validates_since(self):
+        for since in ("", "abc", "-1", "1.5", "1%0A", "1" * 16):
+            with self.subTest(since=since):
+                self.assertEqual(self.call("GET", f"/activity?since={since}")[0], 400)
+        self.assertEqual(self.call("GET", "/activity")[0], 400)
+
+    def test_activity_from_the_local_copy_within_a_month(self):
+        with mock.patch.object(
+            self.mirror,
+            "activity",
+            return_value=[{"key": "ABC-1", "changes": []}]
+        ) as activity:
+            status, body = self.call("GET", "/activity?since=0")
+        self.assertEqual(status, 200)
+        self.assertEqual(json.loads(body), {"issues": [{"key": "ABC-1", "changes": []}]})
+        (oldest,), _ = activity.call_args
+        self.assertAlmostEqual(oldest / 1000, time.time() - MAX_ACTIVITY_DAYS * 24 * 3600, delta=60)
         self.assertEqual(self.upstream.requests, [])
 
     def test_changes_lists_the_recently_updated_issues(self):

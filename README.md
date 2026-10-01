@@ -166,6 +166,7 @@ browser ──► http://localhost:8766 ──► Jira
 | `PUT /rank` | reorders an issue on the board — one of the three possible writes |
 | `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
 | `PUT /transition` | brings an issue to a status, through the transitions of the path |
+| `GET /activity?since=<ms>` | status moves, assignments and comments since then, per issue, from the local copy (a month at most) |
 | `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
 | `GET /changes` | when the background sync last found a changed issue, and the recently changed issues; tells the server a page is watching, unless `?watch=0` |
 | `GET /mirror/status` | state of the local copy |
@@ -176,6 +177,9 @@ browser ──► http://localhost:8766 ──► Jira
   address Jira can reach), so it is asked: every 5 minutes, and every 30 seconds while a page is visible,
   with a light search (modification dates only) followed by the full fetch of the issues that changed.
   A change made elsewhere then reaches the open detail and the board within about 45 seconds.
+- **Since your last visit** (button in the header, shown when there is news): what others changed since
+  the page was last seen — column moves, assignments, comments — from the local copy's history. A visit
+  ends after an hour unseen: a reload keeps the list, the next morning starts a new one.
 - **Notifications** (bell in the header): when someone else changes an issue assigned to you, the
   browser shows what changed (status, comment, assignment…), read from the local copy at no Jira cost. A
   hidden tab keeps asking `/changes?watch=0`, which does not speed up the sync: the notification then

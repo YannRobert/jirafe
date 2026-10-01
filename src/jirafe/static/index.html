@@ -128,6 +128,24 @@ try {
     background: var(--column); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
   }
   .load-panel[hidden] { display: none; }
+  /* What changed since the last visit: hidden while there is nothing new. */
+  .activity { position: relative; }
+  .activity[hidden] { display: none; }
+  .activity-btn .values b { color: var(--accent); }
+  .activity-panel { width: min(36rem, 92vw); max-height: 70vh; overflow-y: auto; font-size: 0.82rem; }
+  .activity-panel .bar { display: flex; align-items: baseline; justify-content: space-between; gap: 1rem; margin-bottom: 0.4rem; }
+  .activity-panel .bar h4 { margin: 0; }
+  .activity-panel .bar button { border: 0; background: none; color: var(--link); cursor: pointer; font: inherit; padding: 0; }
+  .activity-list { margin: 0; padding: 0; list-style: none; display: grid; gap: 0.5rem; }
+  .activity-list > li { border-top: 1px solid var(--border); padding-top: 0.45rem; }
+  .activity-list .issue { display: flex; gap: 0.5rem; align-items: baseline; width: 100%; border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
+  .activity-list .issue:hover .summary { text-decoration: underline dotted; }
+  .activity-list .issue .key { color: var(--link); font-weight: 600; white-space: nowrap; }
+  .activity-list .issue .summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .activity-list ul { margin: 0.25rem 0 0; padding: 0 0 0 0.8rem; list-style: none; display: grid; gap: 0.2rem; color: var(--muted); }
+  .activity-list ul .who { color: var(--text); }
+  .activity-list ul .when { color: var(--faint); font-size: 0.75rem; margin-left: 0.3rem; }
+  .activity-list ul .text { color: var(--text); }
   .load-panel h4 { margin: 0 0 0.5rem; font-size: 0.85rem; }
   .load-panel table { width: 100%; border-collapse: collapse; font-size: 0.8rem; }
   .load-panel th, .load-panel td { padding: 0.2rem 0.4rem; text-align: right; }
@@ -619,6 +637,10 @@ try {
   </div>
   <span class="spacer"></span>
   <div class="right">
+    <div class="activity" id="activity" hidden>
+      <button type="button" class="load-btn activity-btn" id="activity-btn" aria-expanded="false" aria-controls="activity-panel"></button>
+      <div class="load-panel activity-panel" id="activity-panel" hidden></div>
+    </div>
     <div class="jira-load">
       <button type="button" class="load-btn" id="load" aria-expanded="false" aria-controls="load-panel"></button>
       <div class="load-panel" id="load-panel" hidden></div>
@@ -707,6 +729,11 @@ const NOTIFY_KEY = "sprint-board.notify";
 // not the change that was found (a work log, for instance), and its author cannot be told.
 const NOTIFY_MATCH_MS = 60 * 1000;
 const NOTIFY_TEXT_LENGTH = 160;
+// "Since your last visit": a visit ends once the page has gone unseen for VISIT_GAP_MS. A reload, or a
+// coffee break, keeps the same list; coming back the next morning starts a new one.
+const LAST_SEEN_KEY = "sprint-board.lastSeen";
+const VISIT_SINCE_KEY = "sprint-board.visitSince";
+const VISIT_GAP_MS = 60 * 60 * 1000;
 const ERROR_FLASH_MS = 8000;
 const INFO_FLASH_MS = 2500;
 const DETAIL_CACHE_SIZE = 80;
@@ -770,6 +797,9 @@ const state = {
   // The last /changes answer compared, null until the first: what changed before the page opened is
   // not news.
   seenChanges: null,
+  // Start of the current visit (epoch ms), and what changed since then: GET /activity, from the local copy.
+  visitSince: null,
+  activity: [],
   notify: readPreference(NOTIFY_KEY) === "true" && window.Notification?.permission === "granted",
   meta: null,
   boards: {},
@@ -1159,6 +1189,7 @@ function scheduleAutoRefresh() {
 // ---------- Rendering ----------
 
 function render() {
+  renderActivity();
   renderHeader();
   renderFilters();
   renderBoard();
@@ -1734,6 +1765,7 @@ $("load").addEventListener("click", () => toggleLoadPanel($("load-panel").hidden
 document.addEventListener("click", e => {
   if (!$("load-panel").hidden && !e.target.closest(".jira-load")) toggleLoadPanel(false);
   if (!$("about-panel").hidden && !e.target.closest(".about")) toggleAboutPanel(false);
+  if (!$("activity-panel").hidden && !e.target.closest(".activity")) toggleActivityPanel(false);
 });
 
 function toggleAboutPanel(open) {
@@ -1910,11 +1942,126 @@ async function pollChanges(watching) {
   return changes;
 }
 
+// ---------- Since the last visit ----------
+
+function startVisit() {
+  const now = Date.now();
+  const lastSeen = Number(readPreference(LAST_SEEN_KEY)) || 0;
+  const saved = Number(readPreference(VISIT_SINCE_KEY)) || 0;
+  // First visit ever: nothing to compare with yet.
+  state.visitSince = !lastSeen ? now : now - lastSeen > VISIT_GAP_MS ? lastSeen : saved || lastSeen;
+  savePreference(
+    VISIT_SINCE_KEY,
+    String(state.visitSince)
+  );
+  savePreference(
+    LAST_SEEN_KEY,
+    String(now)
+  );
+  loadActivity();
+}
+
+async function loadActivity() {
+  if (!state.visitSince) return;
+  const body = await request(
+    `/activity?since=${state.visitSince}`,
+    { timeout: LOCAL_TIMEOUT_MS }
+  ).then(response => response.ok ? response.json() : null).catch(() => null);
+  if (!body) return;
+  state.activity = body.issues;
+  renderActivity();
+}
+
+const isMe = user => !!user?.name && user.name.toLowerCase() === state.meta?.me?.toLowerCase();
+
+// Other people's changes only: mine, I know about.
+function othersActivity(issues) {
+  return issues
+    .map(issue => ({ ...issue, changes: issue.changes.filter(change => !isMe(change.author)) }))
+    .filter(issue => issue.changes.length);
+}
+
+function renderActivity() {
+  const issues = othersActivity(state.activity);
+  const open = !$("activity-panel").hidden;
+  $("activity").hidden = !issues.length && !open;
+  const count = issues.reduce((sum, issue) => sum + issue.changes.length, 0);
+  $("activity-btn").title = `What others changed since ${formatSince(state.visitSince)}: column moves, assignments, comments`;
+  $("activity-btn").innerHTML = `<span>Since ${escapeHtml(formatSince(state.visitSince))}</span>` +
+    `<span class="values"><b>${count}</b> change${count === 1 ? "" : "s"} · ${issues.length} issue${issues.length === 1 ? "" : "s"}</span>`;
+  if (!open) return;
+  $("activity-panel").innerHTML = `<div class="bar"><h4>Changed by others since ${escapeHtml(formatSince(state.visitSince))}</h4>` +
+    `<button type="button" id="activity-read" title="Start a new list from now">Mark all as read</button></div>` +
+    (issues.length ? activityHtml(issues) : `<p class="muted">Nothing new.</p>`);
+}
+
+// One entry per issue, its changes oldest first; shared with the stand-up.
+function activityHtml(issues) {
+  return `<ul class="activity-list">` + issues.map(issue =>
+    `<li><button type="button" class="issue" data-open="${escapeHtml(issue.key)}" title="Show ${escapeHtml(issue.key)}">` +
+    `<span class="key">${escapeHtml(issue.key)}</span><span class="summary">${escapeHtml(issue.summary ?? "")}</span></button>` +
+    `<ul>${issue.changes.map(changeHtml).join("")}</ul></li>`
+  ).join("") + `</ul>`;
+}
+
+function changeHtml(change) {
+  const who = `<span class="who">${escapeHtml(change.author?.displayName ?? change.author?.name ?? "Someone")}</span>`;
+  const when = `<span class="when" title="${escapeHtml(formatDate(change.at))}">${escapeHtml(relative(change.at))}</span>`;
+  if (change.kind === "comment") return `<li>${who} commented: <span class="text">${escapeHtml(change.text)}</span>${when}</li>`;
+  if (change.kind === "status") return `<li>${who} moved it ${statusPill(change.from)} → ${statusPill(change.to)}${when}</li>`;
+  return `<li>${who} ${change.to ? `assigned it to <span class="text">${escapeHtml(change.to)}</span>` : "unassigned it"}${when}</li>`;
+}
+
+// The history gives status names only: the colour comes from the board's status of that name.
+function statusPill(name) {
+  const category = Object.values(currentBoard()?.statuses ?? {}).find(status => status.name === name)?.category ?? "";
+  return `<span class="status-pill ${escapeHtml(category)}">${escapeHtml(name ?? "—")}</span>`;
+}
+
+function formatSince(at) {
+  const date = new Date(at);
+  const time = date.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" });
+  const days = Math.round((new Date().setHours(0, 0, 0, 0) - new Date(at).setHours(0, 0, 0, 0)) / 86400000);
+  if (days === 0) return time;
+  if (days === 1) return `yesterday ${time}`;
+  return `${date.toLocaleDateString("en-GB", { weekday: "short", day: "numeric", month: "short" })} ${time}`;
+}
+
+function toggleActivityPanel(open) {
+  $("activity-panel").hidden = !open;
+  $("activity-btn").setAttribute("aria-expanded", String(open));
+  renderActivity();
+}
+
+$("activity-btn").addEventListener("click", () => toggleActivityPanel($("activity-panel").hidden));
+$("activity-panel").addEventListener("click", e => {
+  if (e.target.closest("#activity-read")) {
+    state.visitSince = Date.now();
+    savePreference(
+      VISIT_SINCE_KEY,
+      String(state.visitSince)
+    );
+    state.activity = [];
+    toggleActivityPanel(false);
+    return;
+  }
+  const issue = e.target.closest("[data-open]");
+  if (issue) {
+    toggleActivityPanel(false);
+    openDetail(issue.dataset.open);
+  }
+});
+
 // ---------- Notifications ----------
 
 function notifyChanges(recent) {
   const previous = state.seenChanges;
   state.seenChanges = recent;
+  if (!document.hidden) savePreference(
+    LAST_SEEN_KEY,
+    String(Date.now())
+  );
+  if (previous && Object.entries(recent).some(([key, at]) => at > (previous[key] ?? 0))) loadActivity();
   if (!previous || !state.notify) return;
   for (const [key, at] of Object.entries(recent)) {
     if (at > (previous[key] ?? 0)) notifyIfMine(
@@ -3268,6 +3415,10 @@ document.addEventListener("keydown", e => {
     toggleAboutPanel(false);
     return;
   }
+  if (e.key === "Escape" && !$("activity-panel").hidden) {
+    toggleActivityPanel(false);
+    return;
+  }
   const typing = e.target.matches?.("input, select, textarea");
   if ((e.ctrlKey || e.metaKey) && !e.altKey && e.key.toLowerCase() === "c") {
     copyIssues(e);
@@ -3558,6 +3709,11 @@ $("panel-grip").addEventListener("pointerdown", e => {
 applyDock();
 
 document.addEventListener("visibilitychange", () => {
+  if (document.hidden) savePreference(
+    LAST_SEEN_KEY,
+    String(Date.now())
+  );
+  else startVisit();
   if (document.hidden || !state.autoRefresh) scheduleAutoRefresh();
   else sharedRefresh({ olderThan: STALE_ON_FOCUS_MS });
 });
@@ -3570,6 +3726,7 @@ setInterval(refreshLoad, LOAD_REFRESH_MS);
 setInterval(watchChanges, CHANGES_POLL_MS);
 // Without waiting for the first poll: the cards to look at are marked from the first render.
 pollChanges(!document.hidden);
+if (!document.hidden) startVisit();
 $("panel-sync").addEventListener("click", e => {
   if (e.target.closest(".resync") && state.openKey) syncDetail(
     state.openKey,

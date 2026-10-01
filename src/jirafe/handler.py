@@ -11,12 +11,14 @@ from .constants import (
     ASSIGNEE_PATH,
     CONFIG_PLACEHOLDER,
     DEFAULT_RECENT_MINUTES,
+    EPOCH_MS,
     FORWARDED_RESPONSE_HEADERS,
     IMAGE_MAX_AGE_S,
     IMAGE_PREFIXES,
     ISSUE_FRESH_S,
     ISSUE_KEY,
     LIVE_TRANSITIONS_PATH,
+    MAX_ACTIVITY_DAYS,
     MAX_TRANSITION_STEPS,
     MAX_WRITE_BODY_BYTES,
     PAGE_CSP,
@@ -117,6 +119,8 @@ def make_handler(
                         "recent": mirror.recently_updated(settings.get("recent_minutes", DEFAULT_RECENT_MINUTES)),
                     }
                 )
+            elif urlsplit(self.path).path == "/activity":
+                self.send_activity()
             elif self.path == "/stats":
                 self.send_json(200, meter.snapshot())
             elif self.path.startswith("/issue/"):
@@ -341,6 +345,14 @@ def make_handler(
             self.close_connection = True
             self.send_json(403, {"message": "origin refused"})
             return False
+
+        def send_activity(self):
+            since = parse_qs(urlsplit(self.path).query).get("since", [""])[0]
+            if not EPOCH_MS.match(since):
+                self.send_json(400, {"message": "invalid since (epoch milliseconds)"})
+                return
+            oldest = int((time.time() - MAX_ACTIVITY_DAYS * 24 * 3600) * 1000)
+            self.send_json(200, {"issues": mirror.activity(max(int(since), oldest))})
 
         def send_issue(self):
             target = urlsplit(self.path)

@@ -4,8 +4,8 @@ import unittest
 from unittest import mock
 from urllib.parse import parse_qs, urlsplit
 
-from jirafe.constants import BASE_DETAIL_FIELDS, WATCH_TTL_S
-from jirafe.mirror import IssueMirror, detail_fields, slim_history
+from jirafe.constants import ACTIVITY_COMMENT_LENGTH, BASE_DETAIL_FIELDS, WATCH_TTL_S
+from jirafe.mirror import IssueMirror, detail_fields, issue_changes, slim_history
 from tests.fakes import FakeJira
 
 HISTORY = {
@@ -225,3 +225,82 @@ class IncrementalPassTest(unittest.TestCase):
             self.assertTrue(self.mirror.watched())
         with mock.patch("jirafe.mirror.time.monotonic", return_value=1000 + WATCH_TTL_S):
             self.assertFalse(self.mirror.watched())
+
+
+class ActivityTest(unittest.TestCase):
+    # 2026-01-02 10:00 +0100.
+    TEN = 1_767_344_400_000
+
+    ISSUE = {
+        "key": "ABC-1",
+        "fields": {
+            "summary": "Login",
+            "updated": "2026-01-02T11:00:00.000+0100",
+            "assignee": {"name": "bob", "displayName": "Bob", "emailAddress": "bob@example.com"},
+            "comment": {"comments": [
+                {"author": {"name": "carol", "displayName": "Carol"}, "created": "2026-01-02T09:00:00.000+0100", "body": "Old"},
+                {"author": {"name": "carol", "displayName": "Carol"}, "created": "2026-01-02T11:00:00.000+0100", "body": "Fixed\n  on   test"},
+            ]},
+        },
+        "changelog": {"histories": [
+            HISTORY,
+            {
+                "author": {"name": "alice", "displayName": "Alice"},
+                "created": "2026-01-02T10:30:00.000+0100",
+                "items": [
+                    {"field": "status", "fromString": "In Progress", "toString": "Review"},
+                    {"field": "assignee", "fromString": "Alice", "toString": "Bob"},
+                    {"field": "description", "fromString": "a", "toString": "b"},
+                ],
+            },
+        ]},
+    }
+
+    def test_changes_since(self):
+        changes = issue_changes(
+            slimmed(self.ISSUE),
+            self.TEN + 1
+        )
+        self.assertEqual(
+            [(change["kind"], change.get("from"), change.get("to"), change.get("text")) for change in changes],
+            [
+                ("status", "In Progress", "Review", None),
+                ("assignee", "Alice", "Bob", None),
+                ("comment", None, None, "Fixed on test"),
+            ]
+        )
+        self.assertEqual(changes[0]["author"], {"name": "alice", "displayName": "Alice"})
+        self.assertEqual(changes[0]["at"], self.TEN + 1_800_000)
+
+    def test_long_comment_shortened(self):
+        issue = slimmed(self.ISSUE)
+        issue["fields"]["comment"]["comments"][1]["body"] = "x" * 1000
+        (*_, comment) = issue_changes(
+            issue,
+            self.TEN
+        )
+        self.assertEqual(len(comment["text"]), ACTIVITY_COMMENT_LENGTH)
+
+    def test_activity_of_the_local_copy(self):
+        directory = tempfile.TemporaryDirectory()
+        self.addCleanup(directory.cleanup)
+        quiet = {"key": "ABC-2", "fields": {"updated": "2026-01-02T08:00:00.000+0100"}}
+        jira = FakeJira([self.ISSUE, quiet])
+        mirror = IssueMirror(
+            directory.name,
+            jira,
+            42,
+            BASE_DETAIL_FIELDS
+        )
+        mirror.sync_board()
+        jira.paths.clear()
+        (issue,) = mirror.activity(self.TEN)
+        self.assertEqual(issue["key"], "ABC-1")
+        self.assertEqual(issue["assignee"], {"name": "bob", "displayName": "Bob"})
+        self.assertEqual(len(issue["changes"]), 4)
+        self.assertEqual(mirror.activity(self.TEN + 7_200_000), [])
+        self.assertEqual(jira.paths, [])
+
+
+def slimmed(issue):
+    return {**issue, "changelog": {"histories": [slim_history(history) for history in issue["changelog"]["histories"]]}}

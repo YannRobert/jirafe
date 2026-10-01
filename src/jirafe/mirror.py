@@ -7,6 +7,8 @@ from pathlib import Path
 from urllib.parse import quote
 
 from .constants import (
+    ACTIVITY_COMMENT_LENGTH,
+    ACTIVITY_FIELDS,
     BASE_DETAIL_FIELDS,
     FULL_SYNC_INTERVAL_S,
     ISSUE_EXPAND,
@@ -124,6 +126,34 @@ class IssueMirror:
 
     def recently_updated(self, minutes):
         """Issues changed in Jira in the last minutes: {key: epoch milliseconds}."""
+        since = (time.time() - minutes * 60) * 1000
+        return {key: at for key, at in self._updated_since(since)}
+
+    def activity(self, since_ms):
+        """Moves between statuses, assignments and comments made since since_ms, per issue, the most recent
+        activity first. Read from the local copy only: no Jira request."""
+        issues = []
+        for key, _ in self._updated_since(since_ms):
+            entry = self.read(key)
+            changes = entry and issue_changes(
+                entry["data"],
+                since_ms
+            )
+            if changes:
+                fields = entry["data"].get("fields", {})
+                issues.append({
+                    "key": key,
+                    "summary": fields.get("summary"),
+                    "assignee": person(fields.get("assignee")),
+                    "changes": changes,
+                })
+        issues.sort(
+            key=lambda issue: issue["changes"][-1]["at"],
+            reverse=True
+        )
+        return issues
+
+    def _updated_since(self, since_ms):
         with self._updated_lock:
             if self._updated is None:
                 self._updated = {}
@@ -131,8 +161,7 @@ class IssueMirror:
                     entry = self.read(path.stem)
                     if entry:
                         self._note_updated(entry["data"])
-            since = (time.time() - minutes * 60) * 1000
-            return {key: at for key, at in self._updated.items() if at >= since}
+            return [(key, at) for key, at in self._updated.items() if at >= since_ms]
 
     def _note_updated(self, issue):
         at = jira_time(issue.get("fields", {}).get("updated"))
@@ -225,6 +254,43 @@ def slim_history(history):
             for item in history.get("items", [])
         ],
     }
+
+
+def issue_changes(
+        issue,
+        since_ms
+):
+    """The issue's status and assignee changes and its comments since since_ms, oldest first."""
+    changes = []
+    for history in (issue.get("changelog") or {}).get("histories", []):
+        at = jira_time(history.get("created"))
+        if at is None or at < since_ms:
+            continue
+        for item in history.get("items", []):
+            if item.get("field") in ACTIVITY_FIELDS:
+                changes.append({
+                    "at": at,
+                    "author": person(history.get("author")),
+                    "kind": item["field"],
+                    "from": item.get("from"),
+                    "to": item.get("to"),
+                })
+    for comment in (issue.get("fields", {}).get("comment") or {}).get("comments", []):
+        at = jira_time(comment.get("created"))
+        if at is not None and at >= since_ms:
+            body = " ".join((comment.get("body") or "").split())
+            changes.append({
+                "at": at,
+                "author": person(comment.get("author")),
+                "kind": "comment",
+                "text": body if len(body) <= ACTIVITY_COMMENT_LENGTH else body[:ACTIVITY_COMMENT_LENGTH - 1] + "…",
+            })
+    changes.sort(key=lambda change: change["at"])
+    return changes
+
+
+def person(user):
+    return user and {"name": user.get("name"), "displayName": user.get("displayName")}
 
 
 def iso(epoch_seconds):

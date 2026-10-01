@@ -43,6 +43,13 @@ WATCH_TTL_S = 45
 DEFAULT_RECENT_MINUTES = 120
 # A week: beyond it, "recent" no longer means anything on a sprint board.
 MAX_RECENT_MINUTES = 7 * 24 * 60
+# GET /activity: what the page lists since the last visit, or since yesterday for the stand-up — the moves
+# between columns, the assignments and the comments. Read from the local copy only.
+ACTIVITY_FIELDS = ("status", "assignee")
+ACTIVITY_COMMENT_LENGTH = 300
+# The mirror only follows the issues of the open sprints: further back, the list would be both long and
+# incomplete.
+MAX_ACTIVITY_DAYS = 31
 # On Windows, replacing a file another thread is reading fails (PermissionError): the read lasts a few
 # milliseconds, a few spaced attempts are enough.
 REPLACE_ATTEMPTS = 5
@@ -50,6 +57,7 @@ REPLACE_RETRY_DELAY_S = 0.05
 # Patterns end with \Z rather than $: $ also matches before a final line break, which would then reach the
 # URL of a Jira request.
 ISSUE_KEY = re.compile(r"^[A-Z][A-Z0-9_]+-[0-9]+\Z")
+EPOCH_MS = re.compile(r"^[0-9]{1,15}\Z")
 # Standard fields shown by the detail panel; custom fields are added to them according to the configuration.
 BASE_DETAIL_FIELDS = (
     "summary,status,issuetype,priority,assignee,reporter,created,updated,labels,description,comment,"
