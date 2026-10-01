@@ -128,6 +128,19 @@ try {
     background: var(--column); color: var(--text); box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
   }
   .load-panel[hidden] { display: none; }
+  /* Stand-up: one person at a time, their cards on the board and what changed on them since yesterday. */
+  .standup { margin: 0 1.2rem 0.6rem; padding: 0.5rem 0.8rem; border: 1px solid var(--accent); border-radius: 0.5rem; background: var(--column); }
+  .standup[hidden] { display: none; }
+  .standup .who { display: flex; align-items: center; gap: 0.7rem; flex-wrap: wrap; }
+  .standup .who .name { font-size: 1.15rem; font-weight: 600; display: inline-flex; align-items: center; gap: 0.45rem; }
+  .standup .who .avatar { width: 1.8rem; height: 1.8rem; }
+  .standup .who .meta, .standup .who .position { color: var(--muted); font-size: 0.85rem; }
+  .standup .who .spacer { flex: 1; }
+  .standup .who button { border: 1px solid var(--border); border-radius: 4px; background: none; color: var(--text); cursor: pointer; font: inherit; font-size: 0.85rem; padding: 0.15rem 0.55rem; }
+  .standup .who button:hover:not(:disabled) { border-color: var(--accent); }
+  .standup .who button:disabled { opacity: 0.4; cursor: default; }
+  .standup .changes { margin-top: 0.45rem; max-height: 28vh; overflow-y: auto; font-size: 0.82rem; }
+  .standup .changes > p { margin: 0; color: var(--muted); }
   /* What changed since the last visit: hidden while there is nothing new. */
   .activity { position: relative; }
   .activity[hidden] { display: none; }
@@ -140,7 +153,7 @@ try {
   .activity-list > li { border-top: 1px solid var(--border); padding-top: 0.45rem; }
   .activity-list .issue { display: flex; gap: 0.5rem; align-items: baseline; width: 100%; border: 0; background: none; padding: 0; font: inherit; color: var(--text); text-align: left; cursor: pointer; }
   .activity-list .issue:hover .summary { text-decoration: underline dotted; }
-  .activity-list .issue .key { color: var(--link); font-weight: 600; white-space: nowrap; }
+  .activity-list .issue .key, .standup .issue .key { color: var(--link); font-weight: 600; white-space: nowrap; }
   .activity-list .issue .summary { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .activity-list ul { margin: 0.25rem 0 0; padding: 0 0 0 0.8rem; list-style: none; display: grid; gap: 0.2rem; color: var(--muted); }
   .activity-list ul .who { color: var(--text); }
@@ -263,8 +276,9 @@ try {
   }
   .icon-btn.clear:not(:disabled) { color: var(--accent); }
   .icon-btn.clear:disabled { opacity: 0.35; cursor: default; background: none; }
-  .icon-btn.notify { display: inline-flex; padding: 0.3rem 0.4rem; }
-  .icon-btn.notify svg {
+  .icon-btn.notify, .icon-btn.standup-btn { display: inline-flex; padding: 0.3rem 0.4rem; }
+  .icon-btn.standup-btn[aria-pressed="true"] { color: var(--accent-fg); background: var(--accent); }
+  .icon-btn.notify svg, .icon-btn.standup-btn svg {
     width: 1.2rem; height: 1.2rem; fill: none; stroke: currentColor; stroke-width: 1.8;
     stroke-linecap: round; stroke-linejoin: round;
   }
@@ -631,6 +645,7 @@ try {
   <div class="view">
     <span class="views" id="views" role="group" aria-label="Board view"></span>
     <button type="button" class="icon-btn clear" id="clear-filters"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M2.5 4.5 H17.5 L11.8 11.3 V17 L8.2 18.8 V11.3 Z"/><path d="M15.5 15.5 L21 21 M21 15.5 L15.5 21"/></svg></button>
+    <button type="button" class="icon-btn standup-btn" id="standup-toggle" aria-pressed="false" title="Stand-up: one person after the other (S)"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="9" cy="8" r="3.2"/><path d="M3 20 c0-3.6 2.7-6 6-6 s6 2.4 6 6"/><circle cx="17" cy="9" r="2.5"/><path d="M16.5 14.1 c2.6 0.2 4.5 2.4 4.5 5.4"/></svg></button>
     <span class="divider" aria-hidden="true"></span>
     <button type="button" class="icon-btn notify" id="notify" aria-pressed="false"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M6 16.5 V11 a6 6 0 0 1 12 0 V16.5 L19.5 18 H4.5 Z"/><path d="M10 21 h4"/><path class="slash" d="M4 3 L20 21"/></svg></button>
     <button type="button" class="icon-btn" id="theme"></button>
@@ -655,6 +670,7 @@ try {
   </div>
 </header>
 <div class="filters" id="filters"></div>
+<div class="standup" id="standup" hidden></div>
 <div class="error-banner" id="offline" role="alert" hidden>The Jirafe server does not answer: the board shows the last data received. Start it again (<code>start.sh</code>, <code>jirafe.sh</code> or <code>jirafe.cmd</code>); the page reconnects by itself.</div>
 <div id="errors"></div>
 <main><div class="board" id="board"><div class="skeleton">Loading the board…</div></div></main>
@@ -800,6 +816,8 @@ const state = {
   // Start of the current visit (epoch ms), and what changed since then: GET /activity, from the local copy.
   visitSince: null,
   activity: [],
+  // Stand-up mode: {people: [login, …, null for unassigned], index, since, activity}, or null.
+  standup: null,
   notify: readPreference(NOTIFY_KEY) === "true" && window.Notification?.permission === "granted",
   meta: null,
   boards: {},
@@ -1464,14 +1482,15 @@ function setView(view) {
 
 // Quick filters add up (AND), as in Jira.
 function visibleIssues(board) {
-  const active = (state.meta?.quickFilters ?? []).filter(f => state.quick.has(f.id)).map(f => filterPredicate(
+  const standup = state.standup;
+  const active = (state.meta?.quickFilters ?? []).filter(f => state.quick.has(f.id) && !(standup && isPersonFilter(f.id))).map(f => filterPredicate(
     f,
     board
   ));
   const terms = parseSearch(state.q);
   const labels = [...state.labels];
   return board.issues.filter(issue =>
-    active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
+    (!standup || (issue.assignee ?? null) === standup.people[standup.index]) && active.every(p => p(issue)) && labels.every(id => (issue.labels ?? []).some(l => l.toLowerCase() === id)) && terms.every(term => matchesTerm(
       issue,
       board,
       term
@@ -1585,6 +1604,7 @@ function renderBoard() {
     columns
   );
   renderClearFilters();
+  renderStandup();
   // The count follows the view and the search, which only redraw the board, not the filter bar.
   const count = document.querySelector(".filters .count");
   if (count) count.textContent = countText(board);
@@ -1941,6 +1961,96 @@ async function pollChanges(watching) {
   }
   return changes;
 }
+
+// ---------- Stand-up ----------
+
+// Since the start of the previous working day: on Monday, Friday's changes are still news.
+function standupSince() {
+  const day = new Date();
+  day.setHours(0, 0, 0, 0);
+  do day.setDate(day.getDate() - 1); while (day.getDay() === 0 || day.getDay() === 6);
+  return day.getTime();
+}
+
+// Everyone with an issue in the sprint, by first name; unassigned issues last.
+function standupPeople(board) {
+  const names = new Map();
+  for (const issue of board.issues) if (issue.assignee) names.set(issue.assignee, firstName(issue.assignee, issue.assigneeName));
+  const people = [...names.keys()].sort((a, b) => names.get(a).localeCompare(names.get(b), undefined, { sensitivity: "base" }));
+  return board.issues.some(issue => !issue.assignee) ? [...people, null] : people;
+}
+
+function toggleStandup() {
+  if (state.standup) {
+    endStandup();
+    return;
+  }
+  const board = currentBoard();
+  if (!board) return;
+  const since = standupSince();
+  state.standup = { people: standupPeople(board), index: 0, since, activity: [] };
+  closeDetail();
+  clearPicked();
+  renderBoard();
+  request(
+    `/activity?since=${since}`,
+    { timeout: LOCAL_TIMEOUT_MS }
+  ).then(response => response.ok ? response.json() : null).catch(() => null).then(body => {
+    if (!body || state.standup?.since !== since) return;
+    state.standup.activity = body.issues;
+    renderStandup();
+  });
+}
+
+function endStandup() {
+  state.standup = null;
+  renderBoard();
+}
+
+function stepStandup(step) {
+  const standup = state.standup;
+  const index = standup.index + step;
+  if (index < 0 || index >= standup.people.length) return;
+  standup.index = index;
+  closeDetail();
+  clearPicked();
+  renderBoard();
+}
+
+function renderStandup() {
+  const standup = state.standup;
+  $("standup-toggle").setAttribute("aria-pressed", String(!!standup));
+  $("standup").hidden = !standup;
+  const board = currentBoard();
+  if (!standup || !board) return;
+  const login = standup.people[standup.index];
+  const issues = visibleIssues(board);
+  const sample = board.issues.find(issue => (issue.assignee ?? null) === login);
+  const points = issues.reduce((sum, issue) => sum + (issue.points ?? 0), 0);
+  const keys = new Set(issues.map(issue => issue.key));
+  const changed = standup.activity.filter(issue => keys.has(issue.key));
+  const last = standup.index === standup.people.length - 1;
+  $("standup").innerHTML = `<div class="who">` +
+    `<button type="button" data-standup="-1" title="Previous person (P)"${standup.index ? "" : " disabled"}>‹</button>` +
+    `<span class="name">${avatar(login, sample?.assigneeName, sample?.avatar)}${escapeHtml(login ? firstName(login, sample?.assigneeName) : "Unassigned")}</span>` +
+    `<span class="meta">${issues.length} issue${issues.length === 1 ? "" : "s"}${points ? ` · ${formatPoints(points)} pts` : ""}</span>` +
+    `<span class="position">${standup.index + 1} / ${standup.people.length}</span>` +
+    `<button type="button" data-standup="1" title="Next person (N)"${last ? " disabled" : ""}>›</button>` +
+    `<span class="spacer"></span>` +
+    `<button type="button" data-standup="end" title="Back to the whole board (S or Escape)">End stand-up</button></div>` +
+    `<div class="changes">${changed.length
+      ? activityHtml(changed)
+      : `<p>No column move, assignment or comment on these issues since ${escapeHtml(formatSince(standup.since))}.</p>`}</div>`;
+}
+
+$("standup-toggle").addEventListener("click", toggleStandup);
+$("standup").addEventListener("click", e => {
+  const step = e.target.closest("[data-standup]")?.dataset.standup;
+  if (step === "end") endStandup();
+  else if (step) stepStandup(Number(step));
+  const issue = e.target.closest("[data-open]");
+  if (issue) openDetail(issue.dataset.open);
+});
 
 // ---------- Since the last visit ----------
 
@@ -3429,12 +3539,20 @@ document.addEventListener("keydown", e => {
     if (typing && e.target.id === "q" && state.q) return;
     if (!$("panel").hidden) closeDetail();
     else if (typing) e.target.blur();
+    else if (state.standup) endStandup();
     return;
   }
   if (typing) return;
   if (e.key === "/") {
     e.preventDefault();
     $("q")?.focus();
+  } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "s") {
+    toggleStandup();
+  } else if (state.standup && !e.ctrlKey && !e.metaKey && !e.altKey && ["n", "p"].includes(e.key.toLowerCase())) {
+    stepStandup(e.key.toLowerCase() === "n" ? 1 : -1);
+  } else if (state.standup && !state.openKey && ["ArrowLeft", "ArrowRight"].includes(e.key)) {
+    e.preventDefault();
+    stepStandup(e.key === "ArrowRight" ? 1 : -1);
   } else if (!e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "d") {
     toggleDock();
   } else if (state.openKey && !e.ctrlKey && !e.metaKey && !e.altKey && e.key.toLowerCase() === "m") {
@@ -3461,6 +3579,8 @@ document.addEventListener("change", e => {
 $("sprint").addEventListener("change", e => {
   state.sprintId = Number(e.target.value);
   state.picked.clear();
+  // The round of people belongs to the sprint left behind.
+  state.standup = null;
   writeUrl();
   closeDetail();
   render();

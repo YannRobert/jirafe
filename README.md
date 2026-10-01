@@ -180,6 +180,9 @@ browser ──► http://localhost:8766 ──► Jira
 - **Since your last visit** (button in the header, shown when there is news): what others changed since
   the page was last seen — column moves, assignments, comments — from the local copy's history. A visit
   ends after an hour unseen: a reload keeps the list, the next morning starts a new one.
+- **Stand-up** (`S`, or the people icon in the header): the board shows one person's cards at a time,
+  with what changed on them since the previous working day (Friday on a Monday). `N` / `→` goes to the next
+  person, `P` / `←` back, `Escape` returns to the whole board; unassigned issues come last.
 - **Notifications** (bell in the header): when someone else changes an issue assigned to you, the
   browser shows what changed (status, comment, assignment…), read from the local copy at no Jira cost. A
   hidden tab keeps asking `/changes?watch=0`, which does not speed up the sync: the notification then
