@@ -164,6 +164,9 @@ browser ──► http://localhost:8766 ──► Jira
   address Jira can reach), so it is asked: every 5 minutes, and every 30 seconds while a page is visible,
   with a light search (modification dates only) followed by the full fetch of the issues that changed.
   A change made elsewhere then reaches the open detail and the board within about 45 seconds.
+- **Server stopped**: every request from the page has a deadline (a stopped server is not always
+  refused: behind WSL's port forwarding, the connection just hangs). When `/changes` stops answering, a
+  banner says so and the board keeps showing the last data; it goes away once the server is back.
 
 ### Local copy
 

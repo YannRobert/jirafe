@@ -625,6 +625,7 @@ try {
   </div>
 </header>
 <div class="filters" id="filters"></div>
+<div class="error-banner" id="offline" role="alert" hidden>The Jirafe server does not answer: the board shows the last data received. Start it again (<code>start.sh</code>, <code>jirafe.sh</code> or <code>jirafe.cmd</code>); the page reconnects by itself.</div>
 <div id="errors"></div>
 <main><div class="board" id="board"><div class="skeleton">Loading the board…</div></div></main>
 <aside id="panel" hidden aria-label="Issue detail">
@@ -683,6 +684,13 @@ const DETAIL_FRESH_MS = 30 * 1000;
 // detail is read again from the local copy. Asking also tells the server someone is watching: it then
 // checks Jira every 30 s instead of every 5 minutes.
 const CHANGES_POLL_MS = 15 * 1000;
+// A stopped server is not always refused: behind WSL's localhost forwarding, the connection just hangs.
+// Every request therefore has a deadline. Local reads (the copy on disk, /changes, /stats) answer at
+// once; a Jira read is bounded by the server's own Jira timeout (30 s); a move may chain several
+// transitions.
+const LOCAL_TIMEOUT_MS = 5 * 1000;
+const JIRA_READ_TIMEOUT_MS = 45 * 1000;
+const WRITE_TIMEOUT_MS = 2 * 60 * 1000;
 const ERROR_FLASH_MS = 8000;
 const INFO_FLASH_MS = 2500;
 const DETAIL_CACHE_SIZE = 80;
@@ -792,9 +800,37 @@ function savePreference(
 
 // ---------- Jira access ----------
 
+// A request to the Jirafe server with a deadline. A network failure means the server is gone; a timeout
+// may only be Jira being slow, so it is left to the /changes poll to decide.
+async function request(
+  path,
+  { timeout, ...options }
+) {
+  try {
+    return await fetch(
+      path,
+      { ...options, signal: AbortSignal.timeout(timeout) }
+    );
+  } catch (error) {
+    if (error.name === "TimeoutError") throw new Error(`no answer from the Jirafe server after ${Math.round(timeout / 1000)} s`);
+    setServerReachable(false);
+    throw new Error("the Jirafe server cannot be reached");
+  }
+}
+
+function setServerReachable(reachable) {
+  const banner = $("offline");
+  if (banner.hidden === reachable) return;
+  banner.hidden = reachable;
+  if (reachable) flashInfo("The Jirafe server answers again");
+}
+
 async function jira(path) {
   for (let attempt = 0; ; attempt++) {
-    const response = await fetch("/jira/" + path);
+    const response = await request(
+      "/jira/" + path,
+      { timeout: JIRA_READ_TIMEOUT_MS }
+    );
     // Jira sometimes returns transient 500s: a second attempt is almost always enough.
     if (response.status >= 500 && attempt === 0) continue;
     if (!response.ok) {
@@ -1569,12 +1605,20 @@ const LOAD_ORIGINS = [
   ["write", "Writes", "reordering"],
 ];
 
+// Polled every second: a hanging server must not pile up requests.
+let loadPending = false;
+
 function refreshLoad() {
-  if (document.hidden) return;
-  fetch("/stats")
+  if (document.hidden || loadPending) return;
+  loadPending = true;
+  request(
+    "/stats",
+    { timeout: LOCAL_TIMEOUT_MS }
+  )
     .then(response => response.ok ? response.json() : null)
     .then(stats => { if (stats) renderLoad(stats); })
-    .catch(() => {});
+    .catch(() => {})
+    .finally(() => { loadPending = false; });
 }
 
 function renderLoad(stats) {
@@ -1666,7 +1710,10 @@ async function fetchIssue(
   key,
   mode
 ) {
-  const response = await fetch(`/issue/${encodeURIComponent(key)}${ISSUE_QUERY[mode]}`);
+  const response = await request(
+    `/issue/${encodeURIComponent(key)}${ISSUE_QUERY[mode]}`,
+    { timeout: mode === "local" ? LOCAL_TIMEOUT_MS : JIRA_READ_TIMEOUT_MS }
+  );
   if (response.status === 404) return null;
   const body = await response.json();
   if (!response.ok) throw new Error(body.message || `${response.status}`);
@@ -1752,16 +1799,22 @@ async function syncDetail(
 // browser): the board is reloaded, once for all tabs thanks to the shared refresh.
 async function watchChanges() {
   if (document.hidden) return;
-  const { changedAt } = await pollChanges();
+  const { changedAt } = await pollChanges() ?? {};
   reloadOpenDetail();
   const board = currentBoard();
   if (!changedAt || !board || board.at >= changedAt || !state.autoRefresh || drag?.started || state.refreshing) return;
   sharedRefresh({ olderThan: Date.now() - changedAt });
 }
 
+// The poll that tells whether the server is still there: /changes never waits for Jira, so no answer
+// within LOCAL_TIMEOUT_MS means it is down.
 async function pollChanges() {
-  const changes = await fetch("/changes").then(response => response.json()).catch(() => ({}));
-  if (changes.recent) {
+  const changes = await request(
+    "/changes",
+    { timeout: LOCAL_TIMEOUT_MS }
+  ).then(response => response.json()).catch(() => null);
+  setServerReachable(changes !== null);
+  if (changes?.recent) {
     state.recent = changes.recent;
     markRecent();
   }
@@ -1818,7 +1871,9 @@ function renderDetail(
     ? `<span class="muted">Syncing with Jira…</span>` + (entry ? ` <span class="muted">(copy from ${escapeHtml(formatDate(entry.syncedAt))})</span>` : "")
     : entry
       ? `<button type="button" class="resync ${syncError ? "sync-failed" : "muted"}" title="${escapeHtml(syncError ? `${syncError} — click to retry` : "Click to resync from Jira")}">${syncError ? "Sync failed · local copy synced" : "Synced"} ${relative(Date.parse(entry.syncedAt))}</button>`
-      : "";
+      : syncError
+        ? `<button type="button" class="resync sync-failed" title="${escapeHtml(`${syncError} — click to retry`)}">Sync failed · click to retry</button>`
+        : "";
   $("panel-key").textContent = key;
   $("panel-key").href = browseUrl(key);
   const f = data?.fields;
@@ -2516,7 +2571,10 @@ function columnVerdict(column) {
 // A read, made once per drag and only when the card leaves its column.
 function loadTransitions(key) {
   const result = { list: null, error: null };
-  result.promise = fetch(`/transitions/${encodeURIComponent(key)}`)
+  result.promise = request(
+    `/transitions/${encodeURIComponent(key)}`,
+    { timeout: JIRA_READ_TIMEOUT_MS }
+  )
     .then(async response => {
       const body = await response.json().catch(() => ({}));
       if (!response.ok) throw new Error(body.message || body.errorMessages?.join(", ") || response.statusText);
@@ -2771,11 +2829,15 @@ async function write(
   path,
   payload
 ) {
-  const response = await fetch(path, {
-    method: "PUT",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify(payload),
-  });
+  const response = await request(
+    path,
+    {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(payload),
+      timeout: WRITE_TIMEOUT_MS,
+    }
+  );
   const body = await response.json().catch(() => ({}));
   // The body stays with the error: a refused move says there where the issue ended up.
   if (!response.ok) throw Object.assign(new Error(body.message || response.statusText), { body });
