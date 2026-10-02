@@ -127,6 +127,49 @@ the log (`jirafe.log`) sit next to the local copy, in `~/.cache/jirafe` (`~/Libr
 
 Then open <http://localhost:8766>.
 
+### Starting with the computer
+
+Nothing here needs administrator rights: Jirafe runs as you.
+
+- **Linux**: a systemd user service. The token goes in a file only you can read, since a service does not
+  read `~/.profile`: `install -m 600 /dev/null ~/.config/jirafe/jirafe.env`, then write
+  `JIRA_PAT=the-token` in it. Then create `~/.config/systemd/user/jirafe.service` (adapt the path to the
+  repository) and run `systemctl --user enable --now jirafe`:
+
+  ```ini
+  [Unit]
+  Description=Jirafe, the sprint board
+
+  [Service]
+  WorkingDirectory=%h/jirafe/src
+  EnvironmentFile=%h/.config/jirafe/jirafe.env
+  ExecStart=/usr/bin/python3 -u -m jirafe --quiet
+  Restart=on-failure
+  RestartSec=10
+  NoNewPrivileges=yes
+
+  [Install]
+  WantedBy=default.target
+  ```
+
+  It starts with your session (`loginctl enable-linger`, when allowed, starts it at boot instead). Logs:
+  `journalctl --user -u jirafe`. While the service runs, use `systemctl --user stop|restart jirafe` rather
+  than `start.sh` / `stop.sh`.
+- **WSL**: the same service, provided systemd is enabled (`systemd=true` under `[boot]` in
+  `/etc/wsl.conf`): it starts with the distribution, at the first WSL window. To have WSL itself start at
+  logon, and keep running once no WSL window is open, a script in the Windows startup folder (`Win+R`,
+  `shell:startup`), for instance `jirafe-wsl.vbs`, can start it hidden:
+
+  ```vbscript
+  CreateObject("WScript.Shell").Run "wsl.exe -d Ubuntu --exec sh -c ""XDG_RUNTIME_DIR=/run/user/$(id -u) systemctl --user start jirafe.service; exec sleep infinity""", 0, False
+  ```
+
+- **macOS**: a LaunchAgent, `~/Library/LaunchAgents/jirafe.plist`, running `python3 -u -m jirafe --quiet`
+  in the repository's `src` directory with `JIRA_PAT` in its `EnvironmentVariables`, and `RunAtLoad`
+  set; then `launchctl load ~/Library/LaunchAgents/jirafe.plist`. Keep the file `chmod 600`: it holds the token.
+- **Windows**: a shortcut to `jirafe.cmd` in the startup folder (`Win+R`, `shell:startup`); it also opens
+  the browser.
+
 ### Options
 
 | Option | Default | Purpose |
