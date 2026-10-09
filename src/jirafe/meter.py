@@ -22,7 +22,12 @@ class RequestMeter:
             self._recent.append((now, origin))
             self._forget_before(now - METER_WINDOWS_S[-1])
 
-    def snapshot(self):
+    def snapshot(
+            self,
+            detailed=True
+    ):
+        """Without detail, only the totals per window: what the page's header shows, polled more often than
+        the breakdown by origin, which only the open panel needs."""
         now = time.monotonic()
         with self._lock:
             self._forget_before(now - METER_WINDOWS_S[-1])
@@ -34,7 +39,12 @@ class RequestMeter:
             for at, origin in recent:
                 if at >= now - window_s:
                     by_origin[origin] = by_origin.get(origin, 0) + 1
-            windows[f"{window_s // 60}m"] = {"total": sum(by_origin.values()), "byOrigin": by_origin}
+            window = {"total": sum(by_origin.values())}
+            if detailed:
+                window["byOrigin"] = by_origin
+            windows[f"{window_s // 60}m"] = window
+        if not detailed:
+            return {"windows": windows}
         return {"windows": windows, "sinceStart": total, "startedAt": int(self._started_at * 1000)}
 
     def _forget_before(self, horizon):

@@ -212,7 +212,7 @@ browser ──► http://localhost:8766 ──► Jira
 | `PUT /assignee` | changes an issue's assignee (`null` unassigns) |
 | `PUT /transition` | brings an issue to a status, through the transitions of the path |
 | `GET /activity?since=<ms>` | status moves, assignments and comments since then, per issue, from the local copy (a month at most) |
-| `GET /stats` | requests made to Jira over 1, 5 and 15 minutes |
+| `GET /stats` | requests made to Jira over 1, 5 and 15 minutes, by origin; `?summary=1` gives the totals only (the header's counter) |
 | `GET /changes` | when the background sync last found a changed issue, and the recently changed issues; tells the server a page is watching, unless `?watch=0` |
 | `GET /mirror/status` | state of the local copy |
 

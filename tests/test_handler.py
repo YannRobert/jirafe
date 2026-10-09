@@ -415,6 +415,16 @@ class HandlerTest(unittest.TestCase):
         self.assertIn("windows", json.loads(body))
         self.assertEqual(self.upstream.requests, [])
 
+    def test_stats_summary_without_the_breakdown(self):
+        status, body = self.call("GET", "/stats?summary=1")
+        self.assertEqual(status, 200)
+        self.assertEqual(
+            set(json.loads(body)),
+            {"windows"}
+        )
+        self.assertNotIn("byOrigin", json.loads(body)["windows"]["1m"])
+        self.assertEqual(self.upstream.requests, [])
+
     def test_changes_marks_the_mirror_watched(self):
         self.assertFalse(self.mirror.watched())
         status, body = self.call("GET", "/changes")

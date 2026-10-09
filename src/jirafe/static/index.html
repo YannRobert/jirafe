@@ -1779,7 +1779,10 @@ function renderStatus() {
 // Load put on Jira: requests made by the Jirafe server (all tabs and background sync together) over 1, 5
 // and 15 minutes. /stats is served locally, without calling Jira.
 
-const LOAD_REFRESH_MS = 1000;
+// The header only shows the totals: a summary every 10 s is enough. The breakdown by origin is asked every
+// second, and only while its panel is open.
+const LOAD_REFRESH_MS = 10 * 1000;
+const LOAD_PANEL_REFRESH_MS = 1000;
 const LOAD_WINDOWS = ["1m", "5m", "15m"];
 const LOAD_ORIGINS = [
   ["page", "Board", "refresh of the open tabs"],
@@ -1789,27 +1792,40 @@ const LOAD_ORIGINS = [
   ["write", "Writes", "reordering"],
 ];
 
-// Polled every second: a hanging server must not pile up requests.
+// Ticks every second: a hanging server must not pile up requests.
 let loadPending = false;
+let loadAt = 0;
 
 function refreshLoad() {
-  if (document.hidden || loadPending) return;
+  const detailed = !$("load-panel").hidden;
+  if (document.hidden || loadPending || (!detailed && Date.now() - loadAt < LOAD_REFRESH_MS)) return;
   loadPending = true;
   request(
-    "/stats",
+    detailed ? "/stats" : "/stats?summary=1",
     { timeout: LOCAL_TIMEOUT_MS }
   )
     .then(response => response.ok ? response.json() : null)
-    .then(stats => { if (stats) renderLoad(stats); })
+    .then(stats => {
+      if (!stats) return;
+      loadAt = Date.now();
+      renderLoad(
+        stats,
+        detailed
+      );
+    })
     .catch(() => {})
     .finally(() => { loadPending = false; });
 }
 
-function renderLoad(stats) {
+function renderLoad(
+  stats,
+  detailed
+) {
   const total = window => stats.windows[window]?.total ?? 0;
   $("load").title = "Requests sent to Jira by Jirafe over the last minute, the last 5 and the last 15 minutes";
   $("load").innerHTML = `<span>Jira requests · 1 / 5 / 15 min</span>` +
     `<span class="values"><b>${total("1m")}</b><span class="sep"> · </span>${total("5m")}<span class="sep"> · </span>${total("15m")}</span>`;
+  if (!detailed) return;
   const count = (window, origin) => stats.windows[window]?.byOrigin?.[origin] ?? 0;
   const rows = LOAD_ORIGINS.map(([origin, label, hint]) =>
     `<tr><td>${label}<span class="hint">${hint}</span></td>${LOAD_WINDOWS.map(window => `<td>${count(window, origin)}</td>`).join("")}</tr>`
@@ -4213,7 +4229,7 @@ window.addEventListener("storage", e => {
   if (e.key === SNAPSHOT_KEY) adoptNewerSnapshot();
 });
 setInterval(renderStatus, 15 * 1000);
-setInterval(refreshLoad, LOAD_REFRESH_MS);
+setInterval(refreshLoad, LOAD_PANEL_REFRESH_MS);
 setInterval(watchChanges, CHANGES_POLL_MS);
 // Without waiting for the first poll: the cards to look at are marked from the first render.
 pollChanges(!document.hidden);

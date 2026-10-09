@@ -121,8 +121,11 @@ def make_handler(
                 )
             elif urlsplit(self.path).path == "/activity":
                 self.send_activity()
-            elif self.path == "/stats":
-                self.send_json(200, meter.snapshot())
+            elif urlsplit(self.path).path == "/stats":
+                self.send_json(
+                    200,
+                    meter.snapshot(parse_qs(urlsplit(self.path).query).get("summary") != ["1"])
+                )
             elif self.path.startswith("/issue/"):
                 self.send_issue()
             elif self.path.startswith("/transitions/"):

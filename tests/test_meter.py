@@ -33,3 +33,13 @@ class RequestMeterTest(unittest.TestCase):
             snapshot = meter.snapshot()
         self.assertEqual(snapshot["windows"]["15m"]["total"], 0)
         self.assertEqual(snapshot["sinceStart"], 1)
+
+    def test_summary_keeps_only_the_totals(self):
+        meter = RequestMeter()
+        with mock.patch("jirafe.meter.time.monotonic", return_value=0):
+            meter.record("page")
+            snapshot = meter.snapshot(False)
+        self.assertEqual(
+            snapshot,
+            {"windows": {"1m": {"total": 1}, "5m": {"total": 1}, "15m": {"total": 1}}}
+        )
