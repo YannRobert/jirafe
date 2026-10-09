@@ -449,7 +449,7 @@ def make_handler(
             content_type = upstream_headers.get("Content-Type", "application/json")
             headers["Content-Type"] = content_type
             if status == 200 and content_type.startswith("image/"):
-                headers["Cache-Control"] = f"private, max-age={IMAGE_MAX_AGE_S}"
+                headers["Cache-Control"] = f"private, max-age={IMAGE_MAX_AGE_S}, immutable"
             else:
                 headers["Cache-Control"] = "no-store"
             self.send_body(

@@ -20,9 +20,11 @@ RELAYED_PREFIXES = (
     "secure/thumbnail/",
     "images/",
 )
-# Type and priority icons and avatars: identical from one reload to the next, the browser keeps them for
-# a day instead of requesting them again at every render.
-IMAGE_MAX_AGE_S = 24 * 3600
+# Type and priority icons, avatars, attachments: Jira gives a new URL when the image changes (avatarId,
+# attachment id), so the browser keeps them for a week, without revalidating them on reload (immutable),
+# instead of asking Jira again every day. The browser's cache is enough: the server runs on the same
+# machine, a cache of its own would only duplicate it.
+IMAGE_MAX_AGE_S = 7 * 24 * 3600
 UPSTREAM_TIMEOUT_S = 30
 # A connection idle for longer is closed rather than reused: the proxy or the server has probably already
 # dropped it, and trying it would cost a round trip for nothing.

@@ -8,7 +8,7 @@ import unittest
 from unittest import mock
 from http.server import ThreadingHTTPServer
 
-from jirafe.constants import BASE_DETAIL_FIELDS, DEFAULT_RECENT_MINUTES, MAX_ACTIVITY_DAYS
+from jirafe.constants import BASE_DETAIL_FIELDS, DEFAULT_RECENT_MINUTES, IMAGE_MAX_AGE_S, MAX_ACTIVITY_DAYS
 from jirafe.handler import make_handler, relay_allowed
 from jirafe.meter import RequestMeter
 from jirafe.mirror import IssueMirror
@@ -172,6 +172,28 @@ class HandlerTest(unittest.TestCase):
         ):
             with self.subTest(path):
                 self.assertTrue(relay_allowed(path))
+
+    def test_relayed_images_kept_by_the_browser(self):
+        self.upstream.response = (200, b"png", {"Content-Type": "image/png"})
+        connection = http.client.HTTPConnection(
+            "127.0.0.1",
+            self.port,
+            timeout=5
+        )
+        try:
+            connection.request(
+                "GET",
+                "/jira/secure/useravatar?ownerId=alice&avatarId=10"
+            )
+            response = connection.getresponse()
+            response.read()
+        finally:
+            connection.close()
+        self.assertEqual(response.status, 200)
+        self.assertEqual(
+            response.getheader("Cache-Control"),
+            f"private, max-age={IMAGE_MAX_AGE_S}, immutable"
+        )
 
     def test_allowed_relay_adds_pat_server_side(self):
         status, _ = self.call("GET", "/jira/rest/api/2/myself")
